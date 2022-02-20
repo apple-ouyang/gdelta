@@ -54,7 +54,6 @@ int man()
     printf("delta:%d\n",dsize);
     printf("Base:%d\n",Bsize);
     printf("Isize:%d\n",Isize);
-    initematrix();
     int r2 = gdecode( (uint8_t*)del,  (uint32_t)dsize,
                       ( uint8_t*)bas, (uint32_t) Bsize,
                       ( uint8_t*)res, (uint32_t *) &rsize);
@@ -112,11 +111,6 @@ int main()
     printf("Input:%d\n",Isize);
     printf("Base:%d\n",Bsize);
     dsize = 0;
-
-    /**     初始化参数，调用一次即可    **/
-    initematrix();
-
-    /**     初始化参数，调用一次即可    **/
 
     int b = gencode((uint8_t *) inp, Isize,
                               (uint8_t *) bas, Bsize,

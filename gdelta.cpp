@@ -6,12 +6,16 @@
 #include <cstring>
 #include <cstdio>
 #include <sys/time.h>
-#include "md5.h"
+#include "gear-matrix.h"
+
 typedef unsigned int u_int32_t;
 typedef __uint16_t u_int16_t;
 typedef uint8_t u_int8_t;
+
 #define MBSIZE 1024*1024
 #define FPTYPE uint64_t
+#define STRLOOK 16
+#define STRLSTEP 2
 
 typedef struct        /* the least write or read unit of disk */
 {
@@ -118,35 +122,6 @@ u_int16_t Gfast_get_lengthv3(void *record)
     }
 }
 
-#define STRLOOK 16
-#define STRLSTEP 2
-
-uint64_t GEARmx[256];
-
-void initematrix()
-{
-    const uint32_t SymbolTypes = 256;
-    const uint32_t MD5Length = 16;
-    const int SeedLength = 64;
-
-    char seed[SeedLength];
-    for (uint32_t i = 0; i < SymbolTypes; i++) {
-        for (int j = 0; j < SeedLength; j++) {
-            seed[j] = i;
-        }
-
-        GEARmx[i] = 0;
-        char md5_result[MD5Length];
-        md5_state_t md5_state;
-        md5_init(&md5_state);
-        md5_append(&md5_state, (md5_byte_t *) seed, SeedLength);
-        md5_finish(&md5_state, (md5_byte_t *) md5_result);
-
-        memcpy(&GEARmx[i], md5_result, sizeof(uint64_t));
-    }
-}
-
-
 int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize, u_int32_t *hash_table, int mask) {
 
     if (len < STRLOOK) return 0;
@@ -159,7 +134,7 @@ int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize, u_i
     /** GEAR **/
 
     for (; i < STRLOOK; i++) {
-        fingerprint = (fingerprint << (movebitlength)) + GEARmx[data[i]];
+        fingerprint = (fingerprint << (movebitlength)) + gear_matrix[data[i]];
     }
 
 
@@ -193,7 +168,7 @@ int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize, u_i
             }
             /** GEAR **/
 
-            fingerprint = (fingerprint << (movebitlength)) + GEARmx[data[i + STRLOOK]];
+            fingerprint = (fingerprint << (movebitlength)) + gear_matrix[data[i + STRLOOK]];
 
 
 
@@ -222,7 +197,7 @@ int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize, u_i
             }
             /** GEAR **/
 
-            fingerprint = (fingerprint << (movebitlength)) + GEARmx[data[i + STRLOOK]];
+            fingerprint = (fingerprint << (movebitlength)) + gear_matrix[data[i + STRLOOK]];
 
 
             i++;
@@ -440,7 +415,7 @@ int gencode(uint8_t *newBuf, u_int32_t newSize,
     struct timeval t0, t1;
 
 
-    int numBase = 0;
+    int numBase;
     int tmp = (baseSize - begSize - endSize) + 10;
 
     int bit;
@@ -547,7 +522,7 @@ int gencode(uint8_t *newBuf, u_int32_t newSize,
 
     FPTYPE fingerprint = 0;
     for (u_int32_t i = 0; i < STRLOOK && i < newSize - endSize - inputPos; i++) {
-        fingerprint = (fingerprint << (movebitlength)) + GEARmx[(newBuf + inputPos)[i]];
+        fingerprint = (fingerprint << (movebitlength)) + gear_matrix[(newBuf + inputPos)[i]];
     }
 
     int mathflag = 0;
@@ -761,7 +736,7 @@ int gencode(uint8_t *newBuf, u_int32_t newSize,
 //                fingerprint = (fingerprint << (movebitlength)) + GEAR[newBuf[j]];
 //            }
             for (u_int32_t j = cursor ; j < cursor + STRLOOK && cursor + STRLOOK < newSize - endSize; j++) {
-                fingerprint = (fingerprint << (movebitlength)) + GEARmx[newBuf[j]];
+                fingerprint = (fingerprint << (movebitlength)) + gear_matrix[newBuf[j]];
             }
 
 
@@ -769,7 +744,7 @@ int gencode(uint8_t *newBuf, u_int32_t newSize,
         } else {
 
             if (inputPos + STRLOOK < newSize - endSize) fingerprint = (fingerprint << (movebitlength)) +
-                                                                      GEARmx[newBuf[inputPos + STRLOOK]];
+                                                                      gear_matrix[newBuf[inputPos + STRLOOK]];
             inputPos++;
         }
         mathflag = 0;

@@ -6,5 +6,5 @@ include_directories(.)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -O3")
 
-add_library(gdelta STATIC gdelta.cpp md5.c)
-add_executable(gdelta.exe main.cpp gdelta.cpp md5.c)
+add_library(gdelta STATIC gdelta.cpp)
+add_executable(gdelta.exe main.cpp gdelta.cpp)
