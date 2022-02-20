@@ -130,7 +130,7 @@ void initematrix()
     const int SeedLength = 64;
 
     char seed[SeedLength];
-    for (int i = 0; i < SymbolTypes; i++) {
+    for (uint32_t i = 0; i < SymbolTypes; i++) {
         for (int j = 0; j < SeedLength; j++) {
             seed[j] = i;
         }
@@ -239,7 +239,7 @@ int gencode(uint8_t *newBuf, u_int32_t newSize,
                       uint8_t *deltaBuf, u_int32_t *deltaSize) {
     /* detect the head and tail of one chunk */
 
-    int beg = 0, end = 0, begSize = 0, endSize = 0;
+    u_int32_t beg = 0, end = 0, begSize = 0, endSize = 0;
     u_int32_t data_length=0;
     u_int32_t inst_length=0;
     uint8_t databuf[MBSIZE];
@@ -478,10 +478,10 @@ int gencode(uint8_t *newBuf, u_int32_t newSize,
     //printf("hash table :%lu\n", (t0.tv_sec-t1.tv_sec) *1000000 + t0.tv_usec - t1.tv_usec);
     /* end of inserting */
 
-    int inputPos = begSize;
-    int writepos = 0;
-    int cursor;
-    int length;
+    u_int32_t inputPos = begSize;
+    u_int32_t writepos;
+    u_int32_t cursor;
+    u_int32_t length;
     FPTYPE hash;
     //DeltaRecord *psDupSubCnk = NULL;
     FastGeltaUnit1 record1;
@@ -546,7 +546,7 @@ int gencode(uint8_t *newBuf, u_int32_t newSize,
     }
 
     FPTYPE fingerprint = 0;
-    for (int i = 0; i < STRLOOK && i < newSize - endSize - inputPos; i++) {
+    for (u_int32_t i = 0; i < STRLOOK && i < newSize - endSize - inputPos; i++) {
         fingerprint = (fingerprint << (movebitlength)) + GEARmx[(newBuf + inputPos)[i]];
     }
 
@@ -697,7 +697,7 @@ int gencode(uint8_t *newBuf, u_int32_t newSize,
                 }
                 else
                 {
-                    int offset = record1.nOffset;
+                    offset = record1.nOffset;
                     while(matchlen > 16383)
                     {
                         record1.nOffset = offset;
@@ -760,7 +760,7 @@ int gencode(uint8_t *newBuf, u_int32_t newSize,
 //            for (int j = inputPos + STRLOOK; j < cursor + STRLOOK && cursor + STRLOOK < newSize - endSize; j++) {
 //                fingerprint = (fingerprint << (movebitlength)) + GEAR[newBuf[j]];
 //            }
-            for (int j = cursor ; j < cursor + STRLOOK && cursor + STRLOOK < newSize - endSize; j++) {
+            for (u_int32_t j = cursor ; j < cursor + STRLOOK && cursor + STRLOOK < newSize - endSize; j++) {
                 fingerprint = (fingerprint << (movebitlength)) + GEARmx[newBuf[j]];
             }
 
@@ -850,7 +850,7 @@ int gencode(uint8_t *newBuf, u_int32_t newSize,
     {
 
         deltaLen = 0;
-        u_int16_t tmp = inst_length + sizeof(u_int16_t);
+        tmp = inst_length + sizeof(u_int16_t);
         memcpy(deltaBuf+deltaLen,&tmp, sizeof(u_int16_t));
         deltaLen += sizeof(u_int16_t) ;
         inslen  += sizeof(u_int16_t) ;
@@ -875,7 +875,7 @@ int gdecode( uint8_t* deltaBuf,u_int32_t deltaSize,
 {
 
     /* datalength is the cursor of outBuf, and readLength deltaBuf */
-    int dataLength = 0, readLength = sizeof(u_int16_t);
+    u_int32_t dataLength = 0, readLength = sizeof(u_int16_t);
 
     u_int32_t addatalenth = 0;
     memcpy(&addatalenth, deltaBuf , sizeof(uint16_t));
@@ -883,8 +883,8 @@ int gdecode( uint8_t* deltaBuf,u_int32_t deltaSize,
 
 
     int matchnum = 0;
-    int matchlength = 0;
-    int unmatchlength = 0;
+    u_int32_t matchlength = 0;
+    u_int32_t unmatchlength = 0;
     int unmatchnum = 0;
     while (1) {
         u_int16_t flag = Gfast_get_flagv3(deltaBuf + readLength);

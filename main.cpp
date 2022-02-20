@@ -64,7 +64,7 @@ int man()
 
     }
 
-    for(int i=0;i<rsize;i++)
+    for(uint32_t i=0;i<rsize;i++)
     {
         if(inp[i]!=res[i])
         {
