@@ -6,11 +6,9 @@
 #include <cstring>
 #include <cstdio>
 #include <sys/time.h>
-#include "gear-matrix.h"
 
-typedef unsigned int u_int32_t;
-typedef __uint16_t u_int16_t;
-typedef uint8_t u_int8_t;
+#include "gdelta.h"
+#include "gear-mx.h"
 
 #define MBSIZE 1024*1024
 #define FPTYPE uint64_t
@@ -49,80 +47,80 @@ typedef struct        /* the least write or read unit of disk */
     /* the first bit for the flag, the other 31 bits for the length */
 }FastGeltaUnit4;
 
-void Gfast_set_flagv3(void *record, u_int16_t flag)
+void Gfast_set_flagv3(void *record, uint16_t flag)
 {
 
     if (flag == 0) {
-        u_int16_t *flag_length = (u_int16_t *) record;
+        uint16_t *flag_length = (uint16_t *) record;
 
         (*flag_length) = 0x0000; //00 00 0000 0000 0000
     }
     else if(flag == 2)
     {
-        u_int16_t *flag_length = (u_int16_t *) record;
+        uint16_t *flag_length = (uint16_t *) record;
         (*flag_length) = 0x0002; //00 00 0000 0000 0010
     }
     else if(flag == 1)
     {
-        u_int8_t *flag_length = (u_int8_t *) record;
+        uint8_t *flag_length = (uint8_t *) record;
         (*flag_length) = 0x01; //0000 0001
     }
     else if(flag == 3)
     {
-        u_int8_t *flag_length = (u_int8_t *) record;
+        uint8_t *flag_length = (uint8_t *) record;
         (*flag_length) = 0x03; //0000 0011
     }
 
 }
 
-void Gfast_set_lengthv3(void *record, u_int16_t length,u_int16_t flag)
+void Gfast_set_lengthv3(void *record, uint16_t length,uint16_t flag)
 {
     if(flag == 0 || flag==2)
     {
-        u_int16_t *flag_length = (u_int16_t *) record;
-        u_int16_t musk = (*flag_length) & 0x0003; //0000 0000 0000 0011
+        uint16_t *flag_length = (uint16_t *) record;
+        uint16_t musk = (*flag_length) & 0x0003; //0000 0000 0000 0011
         *flag_length = (length << 2) | musk;
-        u_int16_t tmp = *flag_length;
+        uint16_t tmp = *flag_length;
 
     }
     else{
-        u_int8_t *flag_length = (u_int8_t *) record;
-        u_int8_t musk = (*flag_length) & 0x03 ; //0000 0011
+        uint8_t *flag_length = (uint8_t *) record;
+        uint8_t musk = (*flag_length) & 0x03 ; //0000 0011
         *flag_length = (length<<2) | musk;
-        u_int8_t tmp = *flag_length;
+        uint8_t tmp = *flag_length;
     }
 }
-u_int8_t Gfast_get_flagv3(void *record)
+uint8_t Gfast_get_flagv3(void *record)
 {
-    u_int8_t *flag_length = (u_int8_t *) record ; //大小端的问题？？？要加1反正，2字节存进去,现在不用了
-    u_int8_t tmp1 = *flag_length ;
-    u_int8_t flag = tmp1   & 0x03; //0 0000 0011
+    uint8_t *flag_length = (uint8_t *) record ; //大小端的问题？？？要加1反正，2字节存进去,现在不用了
+    uint8_t tmp1 = *flag_length ;
+    uint8_t flag = tmp1   & 0x03; //0 0000 0011
     return flag;  //0000 0011
 }
 
-u_int16_t Gfast_get_lengthv3(void *record)
+uint16_t Gfast_get_lengthv3(void *record)
 {
     int flag = Gfast_get_flagv3(record);
 
     if(flag==0 || flag==2)
     {
-        u_int16_t *flag_length = (u_int16_t *) record;
-        u_int16_t tmp1 = *flag_length;
-        //u_int16_t mask= 0x3FFF; //      0011 1111 1111 1111
-        u_int16_t tmp = tmp1 >> 2;
+        uint16_t *flag_length = (uint16_t *) record;
+        uint16_t tmp1 = *flag_length;
+        //uint16_t mask= 0x3FFF; //      0011 1111 1111 1111
+        uint16_t tmp = tmp1 >> 2;
         return tmp;
     }
     else
     {
-        u_int8_t *flag_length = (u_int8_t *) record;
-        u_int8_t tmp1 = *flag_length;
-        //  u_int8_t mask= 0x3F; // 0011 1111
-        u_int8_t tmp = tmp1 >> 2;
+        uint8_t *flag_length = (uint8_t *) record;
+        uint8_t tmp1 = *flag_length;
+        //  uint8_t mask= 0x3F; // 0011 1111
+        uint8_t tmp = tmp1 >> 2;
         return tmp;
     }
 }
 
-int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize, u_int32_t *hash_table, int mask) {
+int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize, uint32_t *hash_table, int mask) {
 
     if (len < STRLOOK) return 0;
     int i = 0;
@@ -134,7 +132,7 @@ int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize, u_i
     /** GEAR **/
 
     for (; i < STRLOOK; i++) {
-        fingerprint = (fingerprint << (movebitlength)) + gear_matrix[data[i]];
+        fingerprint = (fingerprint << (movebitlength)) + GEARmx[data[i]];
     }
 
 
@@ -168,7 +166,7 @@ int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize, u_i
             }
             /** GEAR **/
 
-            fingerprint = (fingerprint << (movebitlength)) + gear_matrix[data[i + STRLOOK]];
+            fingerprint = (fingerprint << (movebitlength)) + GEARmx[data[i + STRLOOK]];
 
 
 
@@ -197,7 +195,7 @@ int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize, u_i
             }
             /** GEAR **/
 
-            fingerprint = (fingerprint << (movebitlength)) + gear_matrix[data[i + STRLOOK]];
+            fingerprint = (fingerprint << (movebitlength)) + GEARmx[data[i + STRLOOK]];
 
 
             i++;
@@ -209,14 +207,14 @@ int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize, u_i
     return 0;
 }
 
-int gencode(uint8_t *newBuf, u_int32_t newSize,
-                      uint8_t *baseBuf, u_int32_t baseSize,
-                      uint8_t *deltaBuf, u_int32_t *deltaSize) {
+int gencode(uint8_t *newBuf, uint32_t newSize,
+                      uint8_t *baseBuf, uint32_t baseSize,
+                      uint8_t *deltaBuf, uint32_t *deltaSize) {
     /* detect the head and tail of one chunk */
 
-    u_int32_t beg = 0, end = 0, begSize = 0, endSize = 0;
-    u_int32_t data_length=0;
-    u_int32_t inst_length=0;
+    uint32_t beg = 0, end = 0, begSize = 0, endSize = 0;
+    uint32_t data_length=0;
+    uint32_t inst_length=0;
     uint8_t databuf[MBSIZE];
     uint8_t instbuf[MBSIZE];
     if(newSize>=64*1024 || baseSize>=64*1024)
@@ -274,7 +272,7 @@ int gencode(uint8_t *newBuf, u_int32_t newSize,
         FastGeltaUnit3 record3;
         FastGeltaUnit4 record4;
 
-        u_int32_t deltaLen = 0;
+        uint32_t deltaLen = 0;
         if (beg) {
 
             if(begSize < 64)
@@ -385,11 +383,11 @@ int gencode(uint8_t *newBuf, u_int32_t newSize,
         {
 
             deltaLen = 0;
-            u_int16_t tmp = inst_length + sizeof(u_int16_t);
-            instlen += sizeof(u_int16_t);
+            uint16_t tmp = inst_length + sizeof(uint16_t);
+            instlen += sizeof(uint16_t);
 
-            memcpy(deltaBuf+deltaLen,&tmp, sizeof(u_int16_t));
-            deltaLen += sizeof(u_int16_t) ;
+            memcpy(deltaBuf+deltaLen,&tmp, sizeof(uint16_t));
+            deltaLen += sizeof(uint16_t) ;
 
             memcpy(deltaBuf+deltaLen,instbuf,inst_length);
             deltaLen += inst_length ;
@@ -409,7 +407,7 @@ int gencode(uint8_t *newBuf, u_int32_t newSize,
     /* chunk the baseFile */
 
 
-    u_int32_t deltaLen = 0;
+    uint32_t deltaLen = 0;
 
 
     struct timeval t0, t1;
@@ -431,11 +429,11 @@ int gencode(uint8_t *newBuf, u_int32_t newSize,
     uint32_t hash_size = xxsize + 1;
 
 
-//    u_int32_t *hash_table = (u_int32_t *) malloc(sizeof(u_int32_t) * hash_size);
-//    memset(hash_table, 0, sizeof(u_int32_t) * hash_size);
-    u_int32_t hash_table[hash_size] ;
+//    uint32_t *hash_table = (uint32_t *) malloc(sizeof(uint32_t) * hash_size);
+//    memset(hash_table, 0, sizeof(uint32_t) * hash_size);
+    uint32_t hash_table[hash_size] ;
 
-    memset(hash_table, 0, sizeof(u_int32_t) * hash_size);
+    memset(hash_table, 0, sizeof(uint32_t) * hash_size);
     FPTYPE mask = xxsize;
     gettimeofday(&t0, NULL);
 
@@ -453,10 +451,10 @@ int gencode(uint8_t *newBuf, u_int32_t newSize,
     //printf("hash table :%lu\n", (t0.tv_sec-t1.tv_sec) *1000000 + t0.tv_usec - t1.tv_usec);
     /* end of inserting */
 
-    u_int32_t inputPos = begSize;
-    u_int32_t writepos;
-    u_int32_t cursor;
-    u_int32_t length;
+    uint32_t inputPos = begSize;
+    uint32_t writepos;
+    uint32_t cursor;
+    uint32_t length;
     FPTYPE hash;
     //DeltaRecord *psDupSubCnk = NULL;
     FastGeltaUnit1 record1;
@@ -521,8 +519,8 @@ int gencode(uint8_t *newBuf, u_int32_t newSize,
     }
 
     FPTYPE fingerprint = 0;
-    for (u_int32_t i = 0; i < STRLOOK && i < newSize - endSize - inputPos; i++) {
-        fingerprint = (fingerprint << (movebitlength)) + gear_matrix[(newBuf + inputPos)[i]];
+    for (uint32_t i = 0; i < STRLOOK && i < newSize - endSize - inputPos; i++) {
+        fingerprint = (fingerprint << (movebitlength)) + GEARmx[(newBuf + inputPos)[i]];
     }
 
     int mathflag = 0;
@@ -706,7 +704,7 @@ int gencode(uint8_t *newBuf, u_int32_t newSize,
                     memcpy(databuf + data_length, newBuf + inputPos, 1);
                     data_length += 1;
                     handlebytes += 1;
-                    u_int16_t lentmp = Gfast_get_lengthv3(&record2);
+                    uint16_t lentmp = Gfast_get_lengthv3(&record2);
                     Gfast_set_lengthv3(&record2, lentmp + 1,2);
                 }
                 else
@@ -735,8 +733,8 @@ int gencode(uint8_t *newBuf, u_int32_t newSize,
 //            for (int j = inputPos + STRLOOK; j < cursor + STRLOOK && cursor + STRLOOK < newSize - endSize; j++) {
 //                fingerprint = (fingerprint << (movebitlength)) + GEAR[newBuf[j]];
 //            }
-            for (u_int32_t j = cursor ; j < cursor + STRLOOK && cursor + STRLOOK < newSize - endSize; j++) {
-                fingerprint = (fingerprint << (movebitlength)) + gear_matrix[newBuf[j]];
+            for (uint32_t j = cursor ; j < cursor + STRLOOK && cursor + STRLOOK < newSize - endSize; j++) {
+                fingerprint = (fingerprint << (movebitlength)) + GEARmx[newBuf[j]];
             }
 
 
@@ -744,7 +742,7 @@ int gencode(uint8_t *newBuf, u_int32_t newSize,
         } else {
 
             if (inputPos + STRLOOK < newSize - endSize) fingerprint = (fingerprint << (movebitlength)) +
-                                                                      gear_matrix[newBuf[inputPos + STRLOOK]];
+                                                                      GEARmx[newBuf[inputPos + STRLOOK]];
             inputPos++;
         }
         mathflag = 0;
@@ -825,10 +823,10 @@ int gencode(uint8_t *newBuf, u_int32_t newSize,
     {
 
         deltaLen = 0;
-        tmp = inst_length + sizeof(u_int16_t);
-        memcpy(deltaBuf+deltaLen,&tmp, sizeof(u_int16_t));
-        deltaLen += sizeof(u_int16_t) ;
-        inslen  += sizeof(u_int16_t) ;
+        tmp = inst_length + sizeof(uint16_t);
+        memcpy(deltaBuf+deltaLen,&tmp, sizeof(uint16_t));
+        deltaLen += sizeof(uint16_t) ;
+        inslen  += sizeof(uint16_t) ;
         memcpy(deltaBuf+deltaLen,instbuf,inst_length);
         deltaLen += inst_length ;
         inslen   += inst_length ;
@@ -844,25 +842,25 @@ int gencode(uint8_t *newBuf, u_int32_t newSize,
 }
 
 
-int gdecode( uint8_t* deltaBuf,u_int32_t deltaSize,
-                          uint8_t* baseBuf, u_int32_t baseSize,
-                          uint8_t* outBuf,   u_int32_t *outSize)
+int gdecode( uint8_t* deltaBuf,uint32_t deltaSize,
+                          uint8_t* baseBuf, uint32_t baseSize,
+                          uint8_t* outBuf,   uint32_t *outSize)
 {
 
     /* datalength is the cursor of outBuf, and readLength deltaBuf */
-    u_int32_t dataLength = 0, readLength = sizeof(u_int16_t);
+    uint32_t dataLength = 0, readLength = sizeof(uint16_t);
 
-    u_int32_t addatalenth = 0;
+    uint32_t addatalenth = 0;
     memcpy(&addatalenth, deltaBuf , sizeof(uint16_t));
-    u_int32_t  instructionlenth = addatalenth;
+    uint32_t  instructionlenth = addatalenth;
 
 
     int matchnum = 0;
-    u_int32_t matchlength = 0;
-    u_int32_t unmatchlength = 0;
+    uint32_t matchlength = 0;
+    uint32_t unmatchlength = 0;
     int unmatchnum = 0;
     while (1) {
-        u_int16_t flag = Gfast_get_flagv3(deltaBuf + readLength);
+        uint16_t flag = Gfast_get_flagv3(deltaBuf + readLength);
 
         if (flag == 0) {
             matchnum++;

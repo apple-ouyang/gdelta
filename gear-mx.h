@@ -1,17 +1,17 @@
-/** 
+/**
  * @Author: Wang Haitao
  * @Date: 2022-02-20 21:04:03
- * @LastEditTime: 2022-02-20 21:07:56
+ * @LastEditTime: 2022-02-20 21:49:46
  * @LastEditors: Wang Haitao
- * @FilePath: /titan/third-party/gear-matrix.h
- * @Description: Github:https://github.com/apple-ouyang 
+ * @FilePath: /titan/util/gear-matrix.h
+ * @Description: Github:https://github.com/apple-ouyang
  * @ Gitee:https://gitee.com/apple-ouyang
  */
-
+#pragma once
 #include <cstdint>
 
 // Used to map 256 ASCILL characters to 256 random numbers
-uint64_t gear_matrix[256] = {
+uint64_t GEARmx[256] = {
     0xb088d3a9e840f559, 0x5652c7f739ed20d6, 0x45b28969898972ab,
     0x6b0a89d5b68ec777, 0x368f573e8b7a31b7, 0x1dc636dce936d94b,
     0x207a4c4e5554d5b6, 0xa474b34628239acb, 0x3b06a83e1ca3b912,
