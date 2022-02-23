@@ -413,7 +413,6 @@ int gencode(uint8_t *newBuf, uint32_t newSize,
     struct timeval t0, t1;
 
 
-    int numBase;
     int tmp = (baseSize - begSize - endSize) + 10;
 
     int bit;
@@ -438,7 +437,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize,
     gettimeofday(&t0, NULL);
 
 //    vector<int> auxvec;
-    numBase = GFixSizeChunking(baseBuf + begSize, baseSize - begSize - endSize, beg, begSize, hash_table, bit);
+    GFixSizeChunking(baseBuf + begSize, baseSize - begSize - endSize, beg, begSize, hash_table, bit);
     //mask=hash_size;
     gettimeofday(&t1, NULL);
 
@@ -452,7 +451,6 @@ int gencode(uint8_t *newBuf, uint32_t newSize,
     /* end of inserting */
 
     uint32_t inputPos = begSize;
-    uint32_t writepos;
     uint32_t cursor;
     uint32_t length;
     FPTYPE hash;
@@ -524,7 +522,6 @@ int gencode(uint8_t *newBuf, uint32_t newSize,
     }
 
     int mathflag = 0;
-    writepos = inputPos;
     uint32_t handlebytes = begSize;
     int find2 = 0;
     int find1 = 0;
