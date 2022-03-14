@@ -45,7 +45,7 @@ typedef struct /* the least write or read unit of disk */
   /* the first bit for the flag, the other 31 bits for the length */
 } FastGeltaUnit4;
 
-
+/*
 typedef struct  __attribute__((packed)) {
   uint8_t flag: 2;
   uint8_t length: 6;
@@ -58,6 +58,7 @@ typedef struct  __attribute__((packed)) {
 
 static_assert(sizeof(FlagLengthB8) == 1, "Expected flag length bitfield to be 1 byte");
 static_assert(sizeof(FlagLengthB16) == 2, "Expected flag length bitfield to be 2 bytes");
+*/
 
 enum UnitFlag {
   B16_OFFSET = 0b00,
