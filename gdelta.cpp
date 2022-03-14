@@ -81,12 +81,10 @@ void Gfast_set_lengthv3(void *record, uint16_t length, UnitFlag flag) {
     uint16_t *flag_length = (uint16_t *)record;
     uint16_t musk = (*flag_length) & UF_BITMASK; // 0000 0000 0000 0011
     *flag_length = (length << 2) | musk;
-    uint16_t tmp = *flag_length;
   } else {
     uint8_t *flag_length = (uint8_t *)record;
     uint8_t musk = (*flag_length) & UF_BITMASK; // 0000 0011
     *flag_length = (length << 2) | musk;
-    uint8_t tmp = *flag_length;
   }
 }
 
@@ -138,10 +136,10 @@ int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize,
   FPTYPE index = 0;
   int numChunks = len - STRLOOK + 1;
 
-  float hashnum = (float)numChunks / STRLSTEP;
-  float coltime = 0;
-  float sametime = 0;
-  float colratio = 0;
+  //float hashnum = (float)numChunks / STRLSTEP;
+  //float coltime = 0;
+  //float sametime = 0;
+  //float colratio = 0;
 
   int flag = 0;
   if (begflag) {
@@ -251,7 +249,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     FastGeltaUnit2 record2;
 
     FastGeltaUnit3 record3;
-    FastGeltaUnit4 record4;
+    //FastGeltaUnit4 record4;
 
     uint32_t deltaLen = 0;
     if (beg) {
@@ -392,7 +390,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   uint32_t hash_table[hash_size];
 
   memset(hash_table, 0, sizeof(uint32_t) * hash_size);
-  FPTYPE mask = xxsize;
+  //FPTYPE mask = xxsize;
   gettimeofday(&t0, NULL);
 
   //    vector<int> auxvec;
@@ -481,7 +479,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 
   int mathflag = 0;
   uint32_t handlebytes = begSize;
-  int find2 = 0;
+  //int find2 = 0;
   int find1 = 0;
   while (inputPos + STRLOOK <= newSize - endSize) {
 

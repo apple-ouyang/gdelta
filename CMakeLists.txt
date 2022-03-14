@@ -4,7 +4,7 @@ project(Gdelta)
 include_directories(.)
 
 set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -O3 -Werror -Wextra -fsanitize=address -fno-omit-frame-pointer")
+set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -O3 -Wall -Werror -Wextra -fsanitize=address -fno-omit-frame-pointer")
 
 add_library(gdelta STATIC gdelta.cpp)
 add_executable(gdelta.exe main.cpp gdelta.cpp)
