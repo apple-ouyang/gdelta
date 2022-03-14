@@ -120,6 +120,7 @@ usage:
   if (edflags & 0b01) {
 	// Decode origin, delta -> target
 	// Allocate slightly more than the origin and delta combined
+	// TODO: handle status and increase buffer if too small
 	uint32_t target_size = target_delta_size + origin_size * 11 / 10;
 	uint8_t *target = (uint8_t*)malloc(target_size);
 	int status = gdecode(target_delta, target_delta_size, origin, origin_size, target, &target_size);
