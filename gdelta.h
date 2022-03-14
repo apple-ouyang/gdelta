@@ -8,14 +8,16 @@
 #include <stdint.h>
 
 
-int gencode( uint8_t* newBuf, uint32_t newSize,
-                       uint8_t* baseBuf, uint32_t baseSize,
-                       uint8_t* deltaBuf, uint32_t *deltaSize);
+void initematrix();
+
+int gencode( uint8_t* newBuf, u_int32_t newSize,
+                       uint8_t* baseBuf, u_int32_t baseSize,
+                       uint8_t* deltaBuf, u_int32_t *deltaSize);
 
 
-int gdecode( uint8_t* deltaBuf, uint32_t deltaSize,
-                          uint8_t* baseBuf, uint32_t baseSize,
-                          uint8_t* outBuf, uint32_t *outSize);
+int gdecode( uint8_t* deltaBuf, u_int32_t deltaSize,
+                          uint8_t* baseBuf, u_int32_t baseSize,
+                          uint8_t* outBuf, u_int32_t *outSize);
 
 
 

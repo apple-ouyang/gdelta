@@ -2,7 +2,6 @@
 // Created by THL on 2020/7/9.
 //
 
-#include <array>
 #include <stdint.h>
 #include <cstring>
 #include <cstdio>
@@ -122,34 +121,30 @@ u_int16_t Gfast_get_lengthv3(void *record)
 #define STRLOOK 16
 #define STRLSTEP 2
 
-static constexpr ::std::array<uint64_t, 256> initematrix()
+uint64_t GEARmx[256];
+
+void initematrix()
 {
     const uint32_t SymbolTypes = 256;
     const uint32_t MD5Length = 16;
     const int SeedLength = 64;
 
-    char seed[SeedLength] = {0};
-    using result_t = ::std::array<uint64_t, 256>;
-    result_t result = {0};
-
+    char seed[SeedLength];
     for (uint32_t i = 0; i < SymbolTypes; i++) {
         for (int j = 0; j < SeedLength; j++) {
             seed[j] = i;
         }
 
-        result[i] = 0;
-        char md5_result[MD5Length] = {0};
-        md5_state_t md5_state = {};
+        GEARmx[i] = 0;
+        char md5_result[MD5Length];
+        md5_state_t md5_state;
         md5_init(&md5_state);
         md5_append(&md5_state, (md5_byte_t *) seed, SeedLength);
         md5_finish(&md5_state, (md5_byte_t *) md5_result);
 
-        memcpy(&result[i], md5_result, sizeof(uint64_t));
+        memcpy(&GEARmx[i], md5_result, sizeof(uint64_t));
     }
-    return result;
 }
-
-const ::std::array<uint64_t, 256> GEARmx = initematrix();
 
 
 int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize, u_int32_t *hash_table, int mask) {
