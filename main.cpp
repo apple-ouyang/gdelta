@@ -10,65 +10,6 @@
 #include <fcntl.h>
 #include <stdint.h>
 #include <unistd.h>
-#define MBSIZE 1024 * 1024
-
-char *InputFile = (char *)"/home/thl/data/chunk/3177803";
-char *BaseFile = (char *)"/home/thl/data/chunk/3180462";
-
-int man() {
-  uint8_t *inp = (uint8_t *)malloc(10 * MBSIZE); // input
-  uint8_t *bas = (uint8_t *)malloc(10 * MBSIZE);
-  uint8_t *del = (uint8_t *)malloc(10 * MBSIZE);
-  uint8_t *res = (uint8_t *)malloc(10 * MBSIZE);
-  int F1 = open("/home/thl/test/deltabuf", O_RDONLY, 0777);
-  if (F1 <= 0) {
-    printf("OpenFile Fail:%s\n", "/home/thl/test/deltabuf");
-    exit(0);
-  }
-  int F2 = open("/home/thl/test/basebuf", O_RDONLY, 0777);
-  if (F2 <= 0) {
-    printf("OpenFile Fail:%s\n", "/home/thl/test/basebuf");
-    exit(0);
-  }
-  int F3 = open("/home/thl/test/truebuf", O_RDONLY, 0777);
-  if (F3 <= 0) {
-    printf("OpenFile Fail:%s\n", "/home/thl/test/truebuf");
-    exit(0);
-  }
-
-  uint32_t target_size = 0, origin_size = 0, delta_size = 0, rsize = 0;
-
-  while (int chunkLen = read(F1, (char *)(del + delta_size), MBSIZE)) {
-    delta_size += chunkLen;
-  }
-  while (int chunkLen = read(F2, (char *)(bas + origin_size), MBSIZE)) {
-    origin_size += chunkLen;
-  }
-  while (int chunkLen = read(F3, (char *)(inp + target_size), MBSIZE)) {
-    target_size += chunkLen;
-  }
-  printf("delta:%d\n", delta_size);
-  printf("Base:%d\n", origin_size);
-  printf("target_size:%d\n", target_size);
-  int r2 = gdecode((uint8_t *)del, (uint32_t)delta_size, (uint8_t *)bas,
-                   (uint32_t)origin_size, (uint8_t *)res, (uint32_t *)&rsize);
-
-  if (target_size != rsize) {
-    printf("restore size (%d) ERROR!\r\n", rsize);
-  }
-
-  for (uint32_t i = 0; i < rsize; i++) {
-    if (inp[i] != res[i]) {
-      printf("xx:%d\n", i);
-      exit(0);
-    }
-  }
-  if (memcmp(inp, res, target_size) != 0) {
-    printf("delta error!!!\n");
-  }
-
-  return 0;
-}
 
 int load_file_to_memory(const char *filename, uint8_t **result) {
   FILE *f = fopen(filename, "rb");
@@ -96,7 +37,7 @@ int main(int argc, char *argv[]) {
   char *basefp = nullptr;
   char *targetfp = nullptr;
 
-  while ((c = getopt(argc, argv, "edi::t::o:c")) != -1) {
+  while ((c = getopt(argc, argv, "edo:c")) != -1) {
     switch (c) {
     case 'd':
       edflags |= 0b01;
@@ -106,12 +47,6 @@ int main(int argc, char *argv[]) {
       break;
     case 'o':
       cvalue = optarg;
-      break;
-    case 'i':
-      basefp = optarg;
-      break;
-    case 't':
-      targetfp = optarg;
       break;
     case '?':
       if (optopt == 'o')
@@ -128,8 +63,7 @@ int main(int argc, char *argv[]) {
 
   if (edflags > 2 || edflags == 0) {
 usage:
-    fprintf(stderr, "Usage: gdelta [-d|-e] <basefile> <delta|target-file> [-o "
-                    "<outputfile> | -c]\n");
+    fprintf(stderr, "Usage: gdelta [-d|-e] [-o <outputfile>] <basefile> <delta|target-file> \n");
     return 1;
   }
 
@@ -146,7 +80,7 @@ usage:
     }
   }
 
-  printf("Args: input:%s target/delta:%s encode:%d\n", basefp, targetfp,
+  printf("Args: base:%s target/delta:%s encode:%d\n", basefp, targetfp,
          edflags & 0b10);
 
   if (basefp == nullptr || targetfp == nullptr)
