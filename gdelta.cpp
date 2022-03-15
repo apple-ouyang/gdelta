@@ -7,7 +7,6 @@
 #include <stdint.h>
 #include <sys/time.h>
 
-
 #include "gdelta.h"
 #include "gear_matrix.h"
 
@@ -46,50 +45,60 @@ typedef struct /* the least write or read unit of disk */
   /* the first bit for the flag, the other 31 bits for the length */
 } FastGeltaUnit4;
 
-void Gfast_set_flagv3(void *record, uint16_t flag) {
+/*
+typedef struct  __attribute__((packed)) {
+  uint8_t flag: 2;
+  uint8_t length: 6;
+} FlagLengthB8;
 
-  if (flag == 0) {
-    uint16_t *flag_length = (uint16_t *)record;
+typedef struct  __attribute__((packed)) {
+  uint8_t flag: 2;
+  uint16_t length: 14;
+} FlagLengthB16;
 
-    (*flag_length) = 0x0000; // 00 00 0000 0000 0000
-  } else if (flag == 2) {
-    uint16_t *flag_length = (uint16_t *)record;
-    (*flag_length) = 0x0002; // 00 00 0000 0000 0010
-  } else if (flag == 1) {
-    uint8_t *flag_length = (uint8_t *)record;
-    (*flag_length) = 0x01; // 0000 0001
-  } else if (flag == 3) {
-    uint8_t *flag_length = (uint8_t *)record;
-    (*flag_length) = 0x03; // 0000 0011
-  }
+static_assert(sizeof(FlagLengthB8) == 1, "Expected flag length bitfield to be 1 byte");
+static_assert(sizeof(FlagLengthB16) == 2, "Expected flag length bitfield to be 2 bytes");
+*/
+
+enum UnitFlag {
+  B16_OFFSET = 0b00,
+  B8_OFFSET = 0b01,
+  B16_LITERAL = 0b10,
+  B8_LITERAL = 0b11,
+
+  UF_BITMASK = 0b11
+};
+
+void Gfast_set_flagv3(void *record, UnitFlag flag) {
+  // NOTE: this assumes LE arch, should account for BE archs
+  // uint16_t *flag_length = (uint16_t *)record;
+  uint8_t *flag_length = (uint8_t *)record;
+  (*flag_length) = flag & UF_BITMASK;
 }
 
-void Gfast_set_lengthv3(void *record, uint16_t length, uint16_t flag) {
-  if (flag == 0 || flag == 2) {
+void Gfast_set_lengthv3(void *record, uint16_t length, UnitFlag flag) {
+  if (flag == B16_LITERAL || flag == B16_OFFSET) {
     uint16_t *flag_length = (uint16_t *)record;
-    uint16_t musk = (*flag_length) & 0x0003; // 0000 0000 0000 0011
+    uint16_t musk = (*flag_length) & UF_BITMASK; // 0000 0000 0000 0011
     *flag_length = (length << 2) | musk;
-    uint16_t tmp = *flag_length;
-
   } else {
     uint8_t *flag_length = (uint8_t *)record;
-    uint8_t musk = (*flag_length) & 0x03; // 0000 0011
+    uint8_t musk = (*flag_length) & UF_BITMASK; // 0000 0011
     *flag_length = (length << 2) | musk;
-    uint8_t tmp = *flag_length;
   }
 }
-uint8_t Gfast_get_flagv3(void *record) {
-  uint8_t *flag_length =
-      (uint8_t *)record; //大小端的问题？？？要加1反正，2字节存进去,现在不用了
+
+UnitFlag Gfast_get_flagv3(void *record) {
+  // 大小端的问题？？？要加1反正，2字节存进去,现在不用了
+  uint8_t *flag_length = (uint8_t *)record;
   uint8_t tmp1 = *flag_length;
-  uint8_t flag = tmp1 & 0x03; // 0 0000 0011
-  return flag;                // 0000 0011
+  uint8_t flag = tmp1 & UF_BITMASK; // 0 0000 0011
+  return (UnitFlag)flag;            // 0000 0011
 }
 
 uint16_t Gfast_get_lengthv3(void *record) {
   int flag = Gfast_get_flagv3(record);
-
-  if (flag == 0 || flag == 2) {
+  if (flag == B16_LITERAL || flag == B16_OFFSET) {
     uint16_t *flag_length = (uint16_t *)record;
     uint16_t tmp1 = *flag_length;
     // uint16_t mask= 0x3FFF; //      0011 1111 1111 1111
@@ -127,10 +136,10 @@ int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize,
   FPTYPE index = 0;
   int numChunks = len - STRLOOK + 1;
 
-  float hashnum = (float)numChunks / STRLSTEP;
-  float coltime = 0;
-  float sametime = 0;
-  float colratio = 0;
+  //float hashnum = (float)numChunks / STRLSTEP;
+  //float coltime = 0;
+  //float sametime = 0;
+  //float colratio = 0;
 
   int flag = 0;
   if (begflag) {
@@ -240,15 +249,15 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     FastGeltaUnit2 record2;
 
     FastGeltaUnit3 record3;
-    FastGeltaUnit4 record4;
+    //FastGeltaUnit4 record4;
 
     uint32_t deltaLen = 0;
     if (beg) {
 
       if (begSize < 64) {
-        Gfast_set_flagv3(&record3, 1);
+        Gfast_set_flagv3(&record3, B8_OFFSET);
         record3.nOffset = 0;
-        Gfast_set_lengthv3(&record3, begSize, 1);
+        Gfast_set_lengthv3(&record3, begSize, B8_OFFSET);
 
         memcpy(deltaBuf + deltaLen, &record3.flag_length, 1);
         deltaLen += 1;
@@ -259,9 +268,9 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
         memcpy(instbuf + inst_length, &record3.nOffset, 2);
         inst_length += 2;
       } else if (begSize < 16384) {
-        Gfast_set_flagv3(&record1, 0);
+        Gfast_set_flagv3(&record1, B16_OFFSET);
         record1.nOffset = 0;
-        Gfast_set_lengthv3(&record1, begSize, 0);
+        Gfast_set_lengthv3(&record1, begSize, B16_OFFSET);
 
         memcpy(deltaBuf + deltaLen, &record1, sizeof(FastGeltaUnit1));
         memcpy(instbuf + inst_length, &record1, sizeof(FastGeltaUnit1));
@@ -272,18 +281,18 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
         int matchlen = begSize;
         int offset = 0;
         while (matchlen > 16383) {
-          Gfast_set_flagv3(&record1, 0);
+          Gfast_set_flagv3(&record1, B16_OFFSET);
           record1.nOffset = offset;
-          Gfast_set_lengthv3(&record1, 16383, 0);
+          Gfast_set_lengthv3(&record1, 16383, B16_OFFSET);
           offset += 16383;
           matchlen -= 16383;
           memcpy(instbuf + inst_length, &record1, sizeof(FastGeltaUnit1));
           inst_length += sizeof(FastGeltaUnit1);
         }
         if (matchlen) {
-          Gfast_set_flagv3(&record1, 0);
+          Gfast_set_flagv3(&record1, B16_OFFSET);
           record1.nOffset = offset;
-          Gfast_set_lengthv3(&record1, matchlen, 0);
+          Gfast_set_lengthv3(&record1, matchlen, B16_OFFSET);
           memcpy(instbuf + inst_length, &record1, sizeof(FastGeltaUnit1));
           inst_length += sizeof(FastGeltaUnit1);
         }
@@ -294,8 +303,8 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
       int litlen = newSize - begSize - endSize;
       int copylen = 0;
       while (litlen > 16383) {
-        Gfast_set_flagv3(&record2, 2);
-        Gfast_set_lengthv3(&record2, 16383, 2);
+        Gfast_set_flagv3(&record2, B16_LITERAL);
+        Gfast_set_lengthv3(&record2, 16383, B16_LITERAL);
         memcpy(instbuf + inst_length, &record2, sizeof(FastGeltaUnit2));
         inst_length += sizeof(FastGeltaUnit2);
         memcpy(databuf + data_length, newBuf + begSize + copylen, 16383);
@@ -304,8 +313,8 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
         copylen += 16383;
       }
       if (litlen) {
-        Gfast_set_flagv3(&record2, 2);
-        Gfast_set_lengthv3(&record2, litlen, 2);
+        Gfast_set_flagv3(&record2, B16_LITERAL);
+        Gfast_set_lengthv3(&record2, litlen, B16_LITERAL);
 
         memcpy(instbuf + inst_length, &record2, sizeof(FastGeltaUnit2));
         inst_length += sizeof(FastGeltaUnit2);
@@ -317,18 +326,18 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
       int matchlen = endSize;
       int offset = baseSize - endSize;
       while (matchlen > 16383) {
-        Gfast_set_flagv3(&record1, 0);
+        Gfast_set_flagv3(&record1, B16_OFFSET);
         record1.nOffset = offset;
-        Gfast_set_lengthv3(&record1, 16383, 0);
+        Gfast_set_lengthv3(&record1, 16383, B16_OFFSET);
         offset += 16383;
         matchlen -= 16383;
         memcpy(instbuf + inst_length, &record1, sizeof(FastGeltaUnit1));
         inst_length += sizeof(FastGeltaUnit1);
       }
       if (matchlen) {
-        Gfast_set_flagv3(&record1, 0);
+        Gfast_set_flagv3(&record1, B16_OFFSET);
         record1.nOffset = offset;
-        Gfast_set_lengthv3(&record1, matchlen, 0);
+        Gfast_set_lengthv3(&record1, matchlen, B16_OFFSET);
         memcpy(instbuf + inst_length, &record1, sizeof(FastGeltaUnit1));
         inst_length += sizeof(FastGeltaUnit1);
       }
@@ -381,7 +390,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   uint32_t hash_table[hash_size];
 
   memset(hash_table, 0, sizeof(uint32_t) * hash_size);
-  FPTYPE mask = xxsize;
+  //FPTYPE mask = xxsize;
   gettimeofday(&t0, NULL);
 
   //    vector<int> auxvec;
@@ -411,10 +420,10 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   FastGeltaUnit2 record2;
   FastGeltaUnit3 record3;
   FastGeltaUnit4 record4;
-  Gfast_set_flagv3(&record1, 0);
-  Gfast_set_flagv3(&record2, 2);
-  Gfast_set_flagv3(&record3, 1);
-  Gfast_set_flagv3(&record4, 3);
+  Gfast_set_flagv3(&record1, B16_OFFSET);
+  Gfast_set_flagv3(&record2, B16_LITERAL);
+  Gfast_set_flagv3(&record3, B8_OFFSET);
+  Gfast_set_flagv3(&record4, B8_LITERAL);
   int unmatch64flag = 0;
   int flag = 0; /* to represent the last record in the deltaBuf,
        1 for DeltaUnit1, 2 for DeltaUnit2 */
@@ -427,7 +436,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   if (beg) {
     if (begSize < 64) {
       record3.nOffset = 0;
-      Gfast_set_lengthv3(&record3, begSize, 1);
+      Gfast_set_lengthv3(&record3, begSize, B8_OFFSET);
       memcpy(instbuf + inst_length, &record3.flag_length, 1);
       inst_length += 1;
       memcpy(instbuf + inst_length, &record3.nOffset, 2);
@@ -435,7 +444,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
       flag = 1;
     } else if (begSize < 16384) {
       record1.nOffset = 0;
-      Gfast_set_lengthv3(&record1, begSize, 0);
+      Gfast_set_lengthv3(&record1, begSize, B16_OFFSET);
       memcpy(instbuf + inst_length, &record1, sizeof(FastGeltaUnit1));
       inst_length += sizeof(FastGeltaUnit1);
       flag = 1;
@@ -444,18 +453,18 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
       int offset = 0;
       flag = 1;
       while (matchlen > 16383) {
-        Gfast_set_flagv3(&record1, 0);
+        Gfast_set_flagv3(&record1, B16_OFFSET);
         record1.nOffset = offset;
-        Gfast_set_lengthv3(&record1, 16383, 0);
+        Gfast_set_lengthv3(&record1, 16383, B16_OFFSET);
         offset += 16383;
         matchlen -= 16383;
         memcpy(instbuf + inst_length, &record1, sizeof(FastGeltaUnit1));
         inst_length += sizeof(FastGeltaUnit1);
       }
       if (matchlen) {
-        Gfast_set_flagv3(&record1, 0);
+        Gfast_set_flagv3(&record1, B16_OFFSET);
         record1.nOffset = offset;
-        Gfast_set_lengthv3(&record1, matchlen, 0);
+        Gfast_set_lengthv3(&record1, matchlen, B16_OFFSET);
         memcpy(instbuf + inst_length, &record1, sizeof(FastGeltaUnit1));
         inst_length += sizeof(FastGeltaUnit1);
       }
@@ -470,7 +479,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 
   int mathflag = 0;
   uint32_t handlebytes = begSize;
-  int find2 = 0;
+  //int find2 = 0;
   int find1 = 0;
   while (inputPos + STRLOOK <= newSize - endSize) {
 
@@ -497,11 +506,12 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     /* lookup */
     if (mathflag) {
       if (1) {
-        if (flag == 2) {
+        if (flag == B16_LITERAL) {
 
           if (Gfast_get_lengthv3(&record2) <= 63) {
             unmatch64flag = 1;
-            Gfast_set_lengthv3(&record4, Gfast_get_lengthv3(&record2), 3);
+            Gfast_set_lengthv3(&record4, Gfast_get_lengthv3(&record2),
+                               B8_LITERAL);
             memcpy(instbuf + inst_length - sizeof(FastGeltaUnit2), &record4,
                    sizeof(FastGeltaUnit4));
 
@@ -542,7 +552,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 
         /* detect backward */
         int k = 0;
-        if (flag == 2) {
+        if (flag == B16_LITERAL) {
           while (k + 1 <= offset && k + 1 <= Gfast_get_lengthv3(&record2)) {
             if (baseBuf[offset - (k + 1)] == newBuf[inputPos - (k + 1)])
               k++;
@@ -554,9 +564,8 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
         if (k > 0) {
 
           //                    deltaLen -= fast_get_lengthv3(&record2);
-          data_length -= Gfast_get_lengthv3(&record2);
-
           //                    deltaLen -= sizeof(FastDeltaUnit2);
+          data_length -= Gfast_get_lengthv3(&record2);
 
           if (unmatch64flag) {
             inst_length -= sizeof(FastGeltaUnit4);
@@ -565,7 +574,8 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
           }
           unmatch64flag = 0;
 
-          Gfast_set_lengthv3(&record2, Gfast_get_lengthv3(&record2) - k, 2);
+          Gfast_set_lengthv3(&record2, Gfast_get_lengthv3(&record2) - k,
+                             B16_LITERAL);
 
           if (Gfast_get_lengthv3(&record2) > 0) {
 
@@ -573,7 +583,8 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
               memcpy(instbuf + inst_length, &record2, sizeof(FastGeltaUnit2));
               inst_length += sizeof(FastGeltaUnit2);
             } else {
-              Gfast_set_lengthv3(&record4, Gfast_get_lengthv3(&record2), 4);
+              Gfast_set_lengthv3(&record4, Gfast_get_lengthv3(&record2),
+                                 B8_LITERAL);
               memcpy(instbuf + inst_length, &record4, sizeof(FastGeltaUnit4));
               inst_length += sizeof(FastGeltaUnit4);
             }
@@ -587,20 +598,20 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 
         if (matchlen < 64) {
           record3.nOffset = record1.nOffset;
-          Gfast_set_lengthv3(&record3, matchlen, 1);
+          Gfast_set_lengthv3(&record3, matchlen, B8_OFFSET);
           memcpy(instbuf + inst_length, &record3.flag_length, 1);
           inst_length += 1;
           memcpy(instbuf + inst_length, &record3.nOffset, 2);
           inst_length += 2;
         } else if (matchlen < 16384) {
-          Gfast_set_lengthv3(&record1, matchlen, 0);
+          Gfast_set_lengthv3(&record1, matchlen, B16_OFFSET);
           memcpy(instbuf + inst_length, &record1, sizeof(FastGeltaUnit1));
           inst_length += sizeof(FastGeltaUnit1);
         } else {
           offset = record1.nOffset;
           while (matchlen > 16383) {
             record1.nOffset = offset;
-            Gfast_set_lengthv3(&record1, 16383, 0);
+            Gfast_set_lengthv3(&record1, 16383, B16_OFFSET);
             offset += 16383;
             matchlen -= 16383;
             memcpy(instbuf + inst_length, &record1, sizeof(FastGeltaUnit1));
@@ -608,7 +619,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
           }
           if (matchlen) {
             record1.nOffset = offset;
-            Gfast_set_lengthv3(&record1, matchlen, 0);
+            Gfast_set_lengthv3(&record1, matchlen, B16_OFFSET);
             memcpy(instbuf + inst_length, &record1, sizeof(FastGeltaUnit1));
             inst_length += sizeof(FastGeltaUnit1);
           }
@@ -621,19 +632,19 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
       }
     } else {
     handle_hash_error:
-      if (flag == 2) {
+      if (flag == B16_LITERAL) {
 
         if (Gfast_get_lengthv3(&record2) < 16383) {
           memcpy(databuf + data_length, newBuf + inputPos, 1);
           data_length += 1;
           handlebytes += 1;
           uint16_t lentmp = Gfast_get_lengthv3(&record2);
-          Gfast_set_lengthv3(&record2, lentmp + 1, 2);
+          Gfast_set_lengthv3(&record2, lentmp + 1, B16_LITERAL);
         } else {
           memcpy(instbuf + inst_length - sizeof(FastGeltaUnit2), &record2,
                  sizeof(FastGeltaUnit2));
           handlebytes += 1;
-          Gfast_set_lengthv3(&record2, 1, 2);
+          Gfast_set_lengthv3(&record2, 1, B16_LITERAL);
           memcpy(instbuf + inst_length, &record2, sizeof(FastGeltaUnit2));
           inst_length += sizeof(FastGeltaUnit2);
           memcpy(databuf + data_length, newBuf + inputPos, 1);
@@ -642,7 +653,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 
       } else {
         handlebytes += 1;
-        Gfast_set_lengthv3(&record2, 1, 2);
+        Gfast_set_lengthv3(&record2, 1, B16_LITERAL);
         memcpy(instbuf + inst_length, &record2, sizeof(FastGeltaUnit2));
         inst_length += sizeof(FastGeltaUnit2);
         memcpy(databuf + data_length, newBuf + inputPos, 1);
@@ -678,7 +689,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   //    t0.tv_usec); printf("look up:%.3fMB/s\n", (double)(baseSize - begSize -
   //    endSize)/1024/1024/((t1.tv_sec-t0.tv_sec) *1000000 + t1.tv_usec -
   //    t0.tv_usec)*1000000);
-  if (flag == 2) {
+  if (flag == B16_LITERAL) {
 
     //        memcpy(deltaBuf + deltaLen, newBuf + handlebytes, newSize -
     //        endSize - handlebytes);
@@ -690,22 +701,22 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     int litlen =
         Gfast_get_lengthv3(&record2) + (newSize - endSize - handlebytes);
     if (litlen < 16384) {
-      Gfast_set_lengthv3(&record2, litlen, 2);
+      Gfast_set_lengthv3(&record2, litlen, B16_LITERAL);
       memcpy(instbuf + inst_length - sizeof(FastGeltaUnit2), &record2,
              sizeof(FastGeltaUnit2));
     } else {
-      Gfast_set_lengthv3(&record2, 16383, 2);
+      Gfast_set_lengthv3(&record2, 16383, B16_LITERAL);
       memcpy(instbuf + inst_length - sizeof(FastGeltaUnit2), &record2,
              sizeof(FastGeltaUnit2));
-      Gfast_set_lengthv3(&record2, litlen - 16383, 2);
+      Gfast_set_lengthv3(&record2, litlen - 16383, B16_LITERAL);
       memcpy(instbuf + inst_length, &record2, sizeof(FastGeltaUnit2));
       inst_length += sizeof(FastGeltaUnit2);
     }
 
   } else {
     if (newSize - endSize - handlebytes) {
-
-      Gfast_set_lengthv3(&record2, newSize - endSize - handlebytes, 2);
+      Gfast_set_lengthv3(&record2, newSize - endSize - handlebytes,
+                         B16_LITERAL);
 
       //            memcpy(deltaBuf + deltaLen, &record2,
       //            sizeof(FastDeltaUnit2));
@@ -726,9 +737,9 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     int matchlen = endSize;
     int offset = baseSize - endSize;
     while (matchlen > 16383) {
-      Gfast_set_flagv3(&record1, 0);
+      Gfast_set_flagv3(&record1, B16_OFFSET);
       record1.nOffset = offset;
-      Gfast_set_lengthv3(&record1, 16383, 0);
+      Gfast_set_lengthv3(&record1, 16383, B16_OFFSET);
       offset += 16383;
       matchlen -= 16383;
       memcpy(instbuf + inst_length, &record1, sizeof(FastGeltaUnit1));
@@ -736,7 +747,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     }
     if (matchlen) {
       record1.nOffset = offset;
-      Gfast_set_lengthv3(&record1, matchlen, 0);
+      Gfast_set_lengthv3(&record1, matchlen, B16_OFFSET);
       memcpy(instbuf + inst_length, &record1, sizeof(FastGeltaUnit1));
       inst_length += sizeof(FastGeltaUnit1);
     }
@@ -763,8 +774,8 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   return inslen;
 }
 
-int gdecode(uint8_t *deltaBuf, uint32_t deltaSize, uint8_t *baseBuf,
-            uint32_t baseSize, uint8_t *outBuf, uint32_t *outSize) {
+int gdecode(uint8_t *deltaBuf,  uint32_t, uint8_t *baseBuf,
+            uint32_t, uint8_t *outBuf, uint32_t *outSize) {
 
   /* datalength is the cursor of outBuf, and readLength deltaBuf */
   uint32_t dataLength = 0, readLength = sizeof(uint16_t);
@@ -780,7 +791,7 @@ int gdecode(uint8_t *deltaBuf, uint32_t deltaSize, uint8_t *baseBuf,
   while (1) {
     uint16_t flag = Gfast_get_flagv3(deltaBuf + readLength);
 
-    if (flag == 0) {
+    if (flag == B16_OFFSET) { // Matched Offset Literal 16b length
       matchnum++;
       FastGeltaUnit1 record;
       memcpy(&record, deltaBuf + readLength, sizeof(FastGeltaUnit1));
@@ -794,7 +805,7 @@ int gdecode(uint8_t *deltaBuf, uint32_t deltaSize, uint8_t *baseBuf,
 
       // printf("match length:%d\n",get_length(&record));
       dataLength += Gfast_get_lengthv3(&record);
-    } else if (flag == 2) {
+    } else if (flag == B16_LITERAL) { // Unmatched Literal 16b length
       unmatchnum++;
       FastGeltaUnit2 record;
       memcpy(&record, deltaBuf + readLength, sizeof(FastGeltaUnit2));
@@ -809,7 +820,7 @@ int gdecode(uint8_t *deltaBuf, uint32_t deltaSize, uint8_t *baseBuf,
       // printf("unmatch length:%d\n",get_length(&record));
       addatalenth += Gfast_get_lengthv3(&record);
       dataLength += Gfast_get_lengthv3(&record);
-    } else if (flag == 1) {
+    } else if (flag == B8_OFFSET) { // Matched Offset Literal 8b length
 
       matchnum++;
       FastGeltaUnit3 record;
@@ -827,7 +838,7 @@ int gdecode(uint8_t *deltaBuf, uint32_t deltaSize, uint8_t *baseBuf,
 
       // printf("match length:%d\n",get_length(&record));
       dataLength += Gfast_get_lengthv3(&record);
-    } else if (flag == 3) {
+    } else if (flag == B8_LITERAL) { // Unmatched Literal 8b length
       unmatchnum++;
       FastGeltaUnit4 record;
       memcpy(&record, deltaBuf + readLength, sizeof(FastGeltaUnit4));
