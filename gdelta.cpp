@@ -15,6 +15,8 @@
 #define STRLOOK 16
 #define STRLSTEP 2
 
+#define PRINT_PERF 1
+
 typedef struct  __attribute__((packed)) {
   uint8_t flag: 2;
   uint8_t length: 6;
@@ -64,8 +66,8 @@ inline void unit_set_length(T* unit, uint16_t length) {
 }
 
 UnitFlag unit_get_flag_raw(uint8_t *record) {
-  uint8_t flag = *record & UF_BITMASK; // 0 0000 0011
-  return (UnitFlag)flag;            // 0000 0011
+  uint8_t flag = *record & UF_BITMASK;
+  return (UnitFlag)flag;
 }
 
 template<typename T>
@@ -95,11 +97,6 @@ int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize,
   i -= STRLOOK;
   FPTYPE index = 0;
   int numChunks = len - STRLOOK + 1;
-
-  //float hashnum = (float)numChunks / STRLSTEP;
-  //float coltime = 0;
-  //float sametime = 0;
-  //float colratio = 0;
 
   int flag = 0;
   if (begflag) {
@@ -153,14 +150,13 @@ int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize,
 int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
             uint32_t baseSize, uint8_t *deltaBuf, uint32_t *deltaSize) {
   /* detect the head and tail of one chunk */
-
   uint32_t beg = 0, end = 0, begSize = 0, endSize = 0;
   uint32_t data_length = 0;
   uint32_t inst_length = 0;
   uint8_t databuf[MBSIZE];
   uint8_t instbuf[MBSIZE];
   if (newSize >= 64 * 1024 || baseSize >= 64 * 1024) {
-    printf("Gdelta not support size >= 64KB.\n");
+    fprintf(stderr, "Gdelta not support size >= 64KB.\n");
   }
 
   while (begSize + 7 < baseSize && begSize + 7 < newSize) {
@@ -207,7 +203,6 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   if (begSize + endSize >= baseSize) {
     DeltaUnitOffset<FlagLengthB16> record1;
     DeltaUnit<FlagLengthB16> record2;
-
     DeltaUnitOffset<FlagLengthB8> record3;
     //DeltaUnit<FlagLengthB8> record4;
 
@@ -319,7 +314,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
       memcpy(deltaBuf + deltaLen, databuf, data_length);
       deltaLen += data_length;
     } else {
-      printf("wrong instruction and data \n");
+      fprintf(stderr, "wrong instruction and data \n");
     }
 
     *deltaSize = deltaLen;
@@ -331,7 +326,6 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 
   uint32_t deltaLen = 0;
 
-  struct timeval t0, t1;
 
   int tmp = (baseSize - begSize - endSize) + 10;
 
@@ -350,25 +344,24 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   uint32_t hash_table[hash_size];
 
   memset(hash_table, 0, sizeof(uint32_t) * hash_size);
-  //FPTYPE mask = xxsize;
+#if PRINT_PERF
+  struct timeval t0, t1;
   gettimeofday(&t0, NULL);
+#endif
 
-  //    vector<int> auxvec;
   GFixSizeChunking(baseBuf + begSize, baseSize - begSize - endSize, beg,
                    begSize, hash_table, bit);
-  // mask=hash_size;
+#if PRINT_PERF
   gettimeofday(&t1, NULL);
 
-  //    printf("size:%d\n",baseSize - begSize - endSize);
-  //    printf("hash size:%d\n",hash_size);
-  //    printf("rolling hash:%.3fMB/s\n", (double)(baseSize - begSize -
-  //    endSize)/1024/1024/((t1.tv_sec-t0.tv_sec) *1000000 + t1.tv_usec -
-  //    t0.tv_usec)*1000000); printf("rooling hash:%lu\n", (t1.tv_sec-t0.tv_sec)
-  //    *1000000 + t1.tv_usec - t0.tv_usec);
+  fprintf(stderr, "size:%d\n",baseSize - begSize - endSize);
+  fprintf(stderr, "hash size:%d\n",hash_size);
+  fprintf(stderr, "rolling hash:%.3fMB/s\n", (double)(baseSize - begSize - endSize)/1024/1024/((t1.tv_sec-t0.tv_sec) *1000000 + t1.tv_usec - t0.tv_usec)*1000000);
+  fprintf(stderr, "rooling hash:%lu\n", (t1.tv_sec-t0.tv_sec)*1000000 + t1.tv_usec - t0.tv_usec);
 
   gettimeofday(&t0, NULL);
-  // printf("hash table :%lu\n", (t0.tv_sec-t1.tv_sec) *1000000 + t0.tv_usec -
-  // t1.tv_usec);
+  fprintf(stderr, "hash table :%lu\n", (t0.tv_sec-t1.tv_sec) *1000000 + t0.tv_usec - t1.tv_usec);
+#endif
   /* end of inserting */
 
   uint32_t inputPos = begSize;
@@ -521,7 +514,6 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
         }
 
         if (k > 0) {
-
           //                    deltaLen -= fast_get_lengthv3(&record2);
           //                    deltaLen -= sizeof(DeltaUnit2);
           data_length -= unit_get_length(&record2);
@@ -641,11 +633,12 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     //        printf("datalen:%d\n",data_length);
   }
 
+#if PRINT_PERF
   gettimeofday(&t1, NULL);
-  //    printf("look up :%lu\n", (t1.tv_sec-t0.tv_sec) *1000000 + t1.tv_usec -
-  //    t0.tv_usec); printf("look up:%.3fMB/s\n", (double)(baseSize - begSize -
-  //    endSize)/1024/1024/((t1.tv_sec-t0.tv_sec) *1000000 + t1.tv_usec -
-  //    t0.tv_usec)*1000000);
+  fprintf(stderr, "look up:%lu\n", (t1.tv_sec-t0.tv_sec) *1000000 + t1.tv_usec - t0.tv_usec); 
+  fprintf(stderr, "look up:%.3fMB/s\n", (double)(baseSize - begSize - endSize)/1024/1024/((t1.tv_sec-t0.tv_sec) *1000000 + t1.tv_usec - t0.tv_usec)*1000000);
+#endif
+
   if (flag == B16_LITERAL) {
 
     //        memcpy(deltaBuf + deltaLen, newBuf + handlebytes, newSize -
@@ -723,7 +716,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     memcpy(deltaBuf + deltaLen, databuf, data_length);
     deltaLen += data_length;
   } else {
-    printf("wrong instruction and data \n");
+    fprintf(stderr, "wrong instruction and data \n");
   }
 
   *deltaSize = deltaLen;
