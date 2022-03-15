@@ -774,8 +774,8 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   return inslen;
 }
 
-int gdecode(uint8_t *deltaBuf, [[maybe_unused]] uint32_t deltaSize, uint8_t *baseBuf,
-            [[maybe_unused]] uint32_t baseSize, uint8_t *outBuf, uint32_t *outSize) {
+int gdecode(uint8_t *deltaBuf,  uint32_t, uint8_t *baseBuf,
+            uint32_t, uint8_t *outBuf, uint32_t *outSize) {
 
   /* datalength is the cursor of outBuf, and readLength deltaBuf */
   uint32_t dataLength = 0, readLength = sizeof(uint16_t);
