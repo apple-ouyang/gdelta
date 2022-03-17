@@ -118,7 +118,7 @@ int main(int argc, char *argv[]) {
                          delta, &delta_size);
 
     if (write(output_fd, delta, delta_size) < 0) {
-      printf("Failed to write output file (%zd)\n", output_fd);
+      printf("Failed to write output file (%d)\n", output_fd);
       return 1;
     }
 
@@ -136,7 +136,7 @@ int main(int argc, char *argv[]) {
                          target, &target_size);
 
     if (write(output_fd, target, target_size) < 0) {
-      printf("Failed to write output file (%zd)\n", output_fd);
+      printf("Failed to write output file (%d)\n", output_fd);
       return 1;
     }
 
