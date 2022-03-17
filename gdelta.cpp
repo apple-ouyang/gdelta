@@ -59,7 +59,7 @@ enum UnitFlag {
 
 template<typename T>
 inline void unit_set_flag(T* unit, UnitFlag flag) {
-  unit->flag_length.flag = flag & UF_BITMASK;
+  unit->flag_length.flag = flag;
 }
 
 template<typename T>

@@ -116,10 +116,12 @@ usage:
 	uint8_t *delta = (uint8_t*)malloc(delta_size);
 	int status = gencode(target_delta, target_delta_size, origin, origin_size, delta, &delta_size);
 
-	ssize_t wstatus = write(output_fd, delta, delta_size);
-	if (wstatus < 0) {
-		fprintf(stderr, "Failed to write delta to file (%zd)\n", wstatus);
-	}
+
+	if(write(output_fd, delta, delta_size) < 0){
+    printf("Failed to write output file (%zd)", output_fd);
+    return 1;
+  }
+
 	free(delta);
 	return status;
   }
@@ -132,10 +134,12 @@ usage:
 	uint8_t *target = (uint8_t*)malloc(target_size);
 	int status = gdecode(target_delta, target_delta_size, origin, origin_size, target, &target_size);
 
-	ssize_t wstatus = write(output_fd, target, target_size);
-	if (wstatus < 0) {
-		fprintf(stderr, "Failed to write delta to file (%zd)\n", wstatus);
-	}
+
+	if(write(output_fd, target, target_size) < 0){
+    printf("Failed to write output file (%zd)", output_fd);
+    return 1;
+  }
+
 	free(target);
 	return status;
   }
