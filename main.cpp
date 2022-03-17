@@ -11,6 +11,7 @@
 #include <stdint.h>
 #ifdef _MSC_VER
 #include <compat/msvc.h>
+#include <compat/getopt.h>
 #else
 #include <unistd.h>
 #endif
