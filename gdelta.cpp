@@ -17,18 +17,18 @@
 
 #define PRINT_PERF 1
 
-typedef struct  __attribute__((packed)) {
+typedef struct {
   uint8_t flag: 2;
   uint8_t length: 6;
 } FlagLengthB8;
 
-typedef struct  __attribute__((packed)) {
+typedef struct {
   uint8_t flag: 2;
   uint16_t length: 14;
 } FlagLengthB16;
 
 template<typename var>
-struct __attribute__((packed)) DeltaUnit
+struct DeltaUnit
 {
   var flag_length;
 };
@@ -57,7 +57,7 @@ enum UnitFlag {
 
 template<typename T>
 inline void unit_set_flag(T* unit, UnitFlag flag) {
-  unit->flag_length.flag = flag & UF_BITMASK;
+  unit->flag_length.flag = flag;
 }
 
 template<typename T>
