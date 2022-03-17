@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 
+
 int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
             uint32_t baseSize, uint8_t *deltaBuf, uint32_t *deltaSize);
 

@@ -17,6 +17,7 @@
 
 #define PRINT_PERF 1
 
+
 typedef struct  __attribute__((packed)) {
   uint8_t flag: 2;
   uint8_t length: 6;
@@ -37,7 +38,7 @@ template<typename var>
 struct __attribute__((packed)) DeltaUnitOffset
 {
   var flag_length;
-  uint16_t nOffset; // Unused in LITERAL variants
+  uint16_t nOffset;
 };
 
 static_assert(sizeof(DeltaUnitOffset<FlagLengthB8>) == 3, "Expected DeltaUnit<B8> to be 3 bytes");
@@ -73,6 +74,26 @@ UnitFlag unit_get_flag_raw(uint8_t *record) {
 template<typename T>
 inline uint16_t unit_get_length(T* unit) {
   return unit->flag_length.length;
+}
+
+typedef struct {
+  uint8_t *buf;
+  uint64_t cursor;
+  uint64_t length;
+} BufferStreamDescriptor;
+
+template<typename T>
+void write_field(BufferStreamDescriptor &buffer, const T& field)
+{
+  memcpy(buffer.buf + buffer.cursor, &field, sizeof(T));
+  buffer.cursor += sizeof(T);
+  // TODO: check bounds (buffer->length)?
+}
+
+void write_subbuffer(BufferStreamDescriptor &dest, const BufferStreamDescriptor *src, size_t length) {
+  memcpy(dest.buf + dest.cursor, src->buf + src->cursor, length);
+  dest.cursor += length;
+  // TODO: should incr src cursor?
 }
 
 int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize,
@@ -159,9 +180,9 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     fprintf(stderr, "Gdelta not support size >= 64KB.\n");
   }
 
-  while (begSize + 7 < baseSize && begSize + 7 < newSize) {
+  while (begSize + sizeof(uint64_t) <= baseSize && begSize + sizeof(uint64_t) <= newSize) {
     if (*(uint64_t *)(baseBuf + begSize) == *(uint64_t *)(newBuf + begSize)) {
-      begSize += 8;
+      begSize += sizeof(uint64_t);
     } else
       break;
   }
@@ -177,10 +198,10 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   else
     begSize = 0;
 
-  while (endSize + 7 < baseSize && endSize + 7 < newSize) {
-    if (*(uint64_t *)(baseBuf + baseSize - endSize - 8) ==
-        *(uint64_t *)(newBuf + newSize - endSize - 8)) {
-      endSize += 8;
+  while (endSize + sizeof(uint64_t) <= baseSize && endSize + sizeof(uint64_t) <= newSize) {
+    if (*(uint64_t *)(baseBuf + baseSize - endSize - sizeof(uint64_t)) ==
+        *(uint64_t *)(newBuf + newSize - endSize - sizeof(uint64_t))) {
+      endSize += sizeof(uint64_t);
     } else
       break;
   }
@@ -200,37 +221,34 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     endSize = 0;
   /* end of detect */
 
+  uint32_t deltaLen = 0;
+  BufferStreamDescriptor deltaStream = {deltaBuf, deltaLen, *deltaSize};
+  BufferStreamDescriptor instStream = {instbuf,  inst_length, sizeof(instbuf)};
+
   if (begSize + endSize >= baseSize) {
     DeltaUnitOffset<FlagLengthB16> record1;
     DeltaUnit<FlagLengthB16> record2;
     DeltaUnitOffset<FlagLengthB8> record3;
     //DeltaUnit<FlagLengthB8> record4;
 
-    uint32_t deltaLen = 0;
     if (beg) {
-
       if (begSize < 64) {
         unit_set_flag(&record3, B8_OFFSET);
         record3.nOffset = 0;
         unit_set_length(&record3, begSize);
 
-        memcpy(deltaBuf + deltaLen, &record3.flag_length, 1);
-        deltaLen += 1;
-        memcpy(deltaBuf + deltaLen, &record3.nOffset, 2);
-        deltaLen += 2;
-        memcpy(instbuf + inst_length, &record3.flag_length, 1);
-        inst_length += 1;
-        memcpy(instbuf + inst_length, &record3.nOffset, 2);
-        inst_length += 2;
+	write_field(deltaStream, record3.flag_length);
+	write_field(deltaStream, record3.nOffset);
+
+	write_field(instStream, record3.flag_length);
+	write_field(instStream, record3.nOffset);
       } else if (begSize < 16384) {
         unit_set_flag(&record1, B16_OFFSET);
         record1.nOffset = 0;
         unit_set_length(&record1, begSize);
 
-        memcpy(deltaBuf + deltaLen, &record1, sizeof(DeltaUnitOffset<FlagLengthB16>));
-        memcpy(instbuf + inst_length, &record1, sizeof(DeltaUnitOffset<FlagLengthB16>));
-        deltaLen += sizeof(DeltaUnitOffset<FlagLengthB16>);
-        inst_length += sizeof(DeltaUnitOffset<FlagLengthB16>);
+	write_field(deltaStream, record1);
+	write_field(instStream, record1);
       } else { // TODO: > 16383
 
         int matchlen = begSize;
@@ -241,27 +259,23 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
           unit_set_length(&record1, 16383);
           offset += 16383;
           matchlen -= 16383;
-          memcpy(instbuf + inst_length, &record1, sizeof(DeltaUnitOffset<FlagLengthB16>));
-          inst_length += sizeof(DeltaUnitOffset<FlagLengthB16>);
+	  write_field(instStream, record1);
         }
         if (matchlen) {
           unit_set_flag(&record1, B16_OFFSET);
           record1.nOffset = offset;
           unit_set_length(&record1, matchlen);
-          memcpy(instbuf + inst_length, &record1, sizeof(DeltaUnitOffset<FlagLengthB16>));
-          inst_length += sizeof(DeltaUnitOffset<FlagLengthB16>);
+	  write_field(instStream, record1);
         }
       }
     }
     if (newSize - begSize - endSize > 0) {
-
       int litlen = newSize - begSize - endSize;
       int copylen = 0;
       while (litlen > 16383) {
         unit_set_flag(&record2, B16_LITERAL);
         unit_set_length(&record2, 16383);
-        memcpy(instbuf + inst_length, &record2, sizeof(DeltaUnit<FlagLengthB16>));
-        inst_length += sizeof(DeltaUnit<FlagLengthB16>);
+	write_field(instStream, record2);
         memcpy(databuf + data_length, newBuf + begSize + copylen, 16383);
         litlen -= 16383;
         data_length += 16383;
@@ -271,8 +285,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
         unit_set_flag(&record2, B16_LITERAL);
         unit_set_length(&record2, litlen);
 
-        memcpy(instbuf + inst_length, &record2, sizeof(DeltaUnit<FlagLengthB16>));
-        inst_length += sizeof(DeltaUnit<FlagLengthB16>);
+	write_field(instStream, record2);
         memcpy(databuf + data_length, newBuf + begSize + copylen, litlen);
         data_length += litlen;
       }
@@ -286,28 +299,24 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
         unit_set_length(&record1, 16383);
         offset += 16383;
         matchlen -= 16383;
-        memcpy(instbuf + inst_length, &record1, sizeof(DeltaUnitOffset<FlagLengthB16>));
-        inst_length += sizeof(DeltaUnitOffset<FlagLengthB16>);
+	write_field(instStream, record1);
       }
       if (matchlen) {
         unit_set_flag(&record1, B16_OFFSET);
         record1.nOffset = offset;
         unit_set_length(&record1, matchlen);
-        memcpy(instbuf + inst_length, &record1, sizeof(DeltaUnitOffset<FlagLengthB16>));
-        inst_length += sizeof(DeltaUnitOffset<FlagLengthB16>);
+	write_field(instStream, record1);
       }
     }
 
     int instlen = 0;
     if (1) {
-
       deltaLen = 0;
       uint16_t tmp = inst_length + sizeof(uint16_t);
       instlen += sizeof(uint16_t);
 
-      memcpy(deltaBuf + deltaLen, &tmp, sizeof(uint16_t));
-      deltaLen += sizeof(uint16_t);
-
+      write_field(deltaStream, tmp);
+      // TODO: add positioning arg for write_subbuffer(deltaStream, instStream, instStream.tell);
       memcpy(deltaBuf + deltaLen, instbuf, inst_length);
       deltaLen += inst_length;
       instlen += inst_length;
@@ -324,9 +333,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 
   /* chunk the baseFile */
 
-  uint32_t deltaLen = 0;
-
-
+  deltaLen = 0;
   int tmp = (baseSize - begSize - endSize) + 10;
 
   int bit;
@@ -390,10 +397,10 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     if (begSize < 64) {
       record3.nOffset = 0;
       unit_set_length(&record3, begSize);
-      memcpy(instbuf + inst_length, &record3.flag_length, 1);
-      inst_length += 1;
-      memcpy(instbuf + inst_length, &record3.nOffset, 2);
-      inst_length += 2;
+      memcpy(instbuf + inst_length, &record3.flag_length, sizeof(record3.flag_length));
+      inst_length += sizeof(record3.flag_length);
+      memcpy(instbuf + inst_length, &record3.nOffset, sizeof(record3.nOffset));
+      inst_length += sizeof(record3.nOffset);
       flag = 1;
     } else if (begSize < 16384) {
       record1.nOffset = 0;
@@ -481,7 +488,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
                cursor + j + 7 < newSize - endSize) {
           if (*(uint64_t *)(baseBuf + offset + length + j) ==
               *(uint64_t *)(newBuf + cursor + j)) {
-            j += 8;
+            j += sizeof(uint64_t);
           } else
             break;
         }
@@ -528,7 +535,6 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
           unit_set_length(&record2, unit_get_length(&record2) - k);
 
           if (unit_get_length(&record2) > 0) {
-
             if (unit_get_length(&record2) >= 64) {
               memcpy(instbuf + inst_length, &record2, sizeof(DeltaUnit<FlagLengthB16>));
               inst_length += sizeof(DeltaUnit<FlagLengthB16>);
@@ -548,10 +554,10 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
         if (matchlen < 64) {
           record3.nOffset = record1.nOffset;
           unit_set_length(&record3, matchlen);
-          memcpy(instbuf + inst_length, &record3.flag_length, 1);
-          inst_length += 1;
-          memcpy(instbuf + inst_length, &record3.nOffset, 2);
-          inst_length += 2;
+          memcpy(instbuf + inst_length, &record3.flag_length, sizeof(record3.flag_length));
+          inst_length += sizeof(record3.flag_length);
+          memcpy(instbuf + inst_length, &record3.nOffset, sizeof(record3.nOffset));
+          inst_length += sizeof(record3.nOffset);
         } else if (matchlen < 16384) {
           unit_set_length(&record1, matchlen);
           memcpy(instbuf + inst_length, &record1, sizeof(DeltaUnitOffset<FlagLengthB16>));
@@ -630,7 +636,6 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
       inputPos++;
     }
     mathflag = 0;
-    //        printf("datalen:%d\n",data_length);
   }
 
 #if PRINT_PERF
@@ -641,11 +646,8 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 
   if (flag == B16_LITERAL) {
 
-    //        memcpy(deltaBuf + deltaLen, newBuf + handlebytes, newSize -
-    //        endSize - handlebytes);
     memcpy(databuf + data_length, newBuf + handlebytes,
            newSize - endSize - handlebytes);
-    //        deltaLen += newSize - endSize - handlebytes;
     data_length += (newSize - endSize - handlebytes);
 
     int litlen =
@@ -667,17 +669,11 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     if (newSize - endSize - handlebytes) {
       unit_set_length(&record2, newSize - endSize - handlebytes);
 
-      //            memcpy(deltaBuf + deltaLen, &record2,
-      //            sizeof(DeltaUnit2));
       memcpy(instbuf + inst_length, &record2, sizeof(DeltaUnit<FlagLengthB16>));
-      //            deltaLen += sizeof(DeltaUnit2);
       inst_length += sizeof(DeltaUnit<FlagLengthB16>);
 
-      //            memcpy(deltaBuf + deltaLen, newBuf + inputPos, newSize -
-      //            endSize - handlebytes);
       memcpy(databuf + data_length, newBuf + inputPos,
              newSize - endSize - handlebytes);
-      //            deltaLen += newSize - endSize - handlebytes;
       data_length += newSize - endSize - handlebytes;
     }
   }
@@ -746,12 +742,9 @@ int gdecode(uint8_t *deltaBuf,  uint32_t, uint8_t *baseBuf,
       memcpy(&record, deltaBuf + readLength, sizeof(DeltaUnitOffset<FlagLengthB16>));
 
       readLength += sizeof(DeltaUnitOffset<FlagLengthB16>);
-
       matchlength += unit_get_length(&record);
-
       memcpy(outBuf + dataLength, baseBuf + record.nOffset,
              unit_get_length(&record));
-
       // printf("match length:%d\n",get_length(&record));
       dataLength += unit_get_length(&record);
     } else if (flag == B16_LITERAL) { // Unmatched Literal 16b length
@@ -773,10 +766,10 @@ int gdecode(uint8_t *deltaBuf,  uint32_t, uint8_t *baseBuf,
 
       matchnum++;
       DeltaUnitOffset<FlagLengthB8> record;
-      memcpy(&record.flag_length, deltaBuf + readLength, 1);
-      readLength += 1;
-      memcpy(&record.nOffset, deltaBuf + readLength, 2);
-      readLength += 2;
+      memcpy(&record.flag_length, deltaBuf + readLength, sizeof(record.flag_length));
+      readLength += sizeof(record.flag_length);
+      memcpy(&record.nOffset, deltaBuf + readLength, sizeof(record.nOffset));
+      readLength += sizeof(record.nOffset);
 
       // printf("offset: %d\n",record.nOffset);
 
@@ -807,8 +800,6 @@ int gdecode(uint8_t *deltaBuf,  uint32_t, uint8_t *baseBuf,
       break;
     }
   }
-
-  // printf("decode data len = %d.\r\n", dataLength);
 
   *outSize = dataLength;
   return dataLength;
