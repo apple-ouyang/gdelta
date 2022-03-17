@@ -17,33 +17,35 @@
 
 #define PRINT_PERF 1
 
-typedef struct  __attribute__((packed)) {
+#pragma pack(push,1)
+typedef struct {
   uint8_t flag: 2;
   uint8_t length: 6;
 } FlagLengthB8;
 
-typedef struct  __attribute__((packed)) {
-  uint8_t flag: 2;
+typedef struct {
+  uint16_t flag: 2;
   uint16_t length: 14;
 } FlagLengthB16;
 
 template<typename var>
-struct __attribute__((packed)) DeltaUnit
+struct DeltaUnit
 {
   var flag_length;
 };
 
 template<typename var>
-struct __attribute__((packed)) DeltaUnitOffset
+struct DeltaUnitOffset
 {
   var flag_length;
   uint16_t nOffset; // Unused in LITERAL variants
 };
+#pragma pack(pop)
 
 static_assert(sizeof(DeltaUnitOffset<FlagLengthB8>) == 3, "Expected DeltaUnit<B8> to be 3 bytes");
 static_assert(sizeof(DeltaUnitOffset<FlagLengthB16>) == 4, "Expected DeltaUnit<B16> to be 4 bytes");
-static_assert(sizeof(DeltaUnit<FlagLengthB8>) == 1, "Expected DeltaUnit<B8> to be 3 bytes");
-static_assert(sizeof(DeltaUnit<FlagLengthB16>) == 2, "Expected DeltaUnit<B16> to be 4 bytes");
+static_assert(sizeof(DeltaUnit<FlagLengthB8>) == 1, "Expected DeltaUnit<B8> to be 1 bytes");
+static_assert(sizeof(DeltaUnit<FlagLengthB16>) == 2, "Expected DeltaUnit<B16> to be 2 bytes");
 
 enum UnitFlag {
   B16_OFFSET = 0b00,

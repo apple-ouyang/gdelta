@@ -4,7 +4,6 @@
 
 #ifndef GDELTA_GDELTA_H
 #define GDELTA_GDELTA_H
-
 #include <stdint.h>
 
 int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
