@@ -360,10 +360,10 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   fprintf(stderr, "size:%d\n",baseSize - begSize - endSize);
   fprintf(stderr, "hash size:%d\n",hash_size);
   fprintf(stderr, "rolling hash:%.3fMB/s\n", (double)(baseSize - begSize - endSize)/1024/1024/((t1.tv_sec-t0.tv_sec) *1000000000 + t1.tv_nsec - t0.tv_nsec)*1000000000);
-  fprintf(stderr, "rooling hash:%lu\n", (t1.tv_sec-t0.tv_sec)*1000000000 + t1.tv_nsec - t0.tv_nsec);
+  fprintf(stderr, "rooling hash:%zd\n", (t1.tv_sec-t0.tv_sec)*1000000000 + t1.tv_nsec - t0.tv_nsec);
 
   clock_gettime(CLOCK_MONOTONIC, &t0);
-  fprintf(stderr, "hash table :%lu\n", (t0.tv_sec-t1.tv_sec) *1000000000 + t0.tv_nsec - t1.tv_nsec);
+  fprintf(stderr, "hash table :%zd\n", (t0.tv_sec-t1.tv_sec) *1000000000 + t0.tv_nsec - t1.tv_nsec);
 #endif
   /* end of inserting */
 
@@ -638,7 +638,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 
 #if PRINT_PERF
   clock_gettime(CLOCK_MONOTONIC, &t1);
-  fprintf(stderr, "look up:%lu\n", (t1.tv_sec-t0.tv_sec) *1000000000 + t1.tv_nsec - t0.tv_nsec); 
+  fprintf(stderr, "look up:%zd\n", (t1.tv_sec-t0.tv_sec) *1000000000 + t1.tv_nsec - t0.tv_nsec); 
   fprintf(stderr, "look up:%.3fMB/s\n", (double)(baseSize - begSize - endSize)/1024/1024/((t1.tv_sec-t0.tv_sec) *1000000000 + t1.tv_nsec - t0.tv_nsec)*1000000000);
 #endif
 
