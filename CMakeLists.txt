@@ -10,3 +10,4 @@ add_library(gdelta STATIC gdelta.cpp)
 add_executable(gdelta.exe main.cpp gdelta.cpp)
 
 install(TARGETS gdelta gdelta.exe)
+install(FILES gdelta.h DESTINATION include)
