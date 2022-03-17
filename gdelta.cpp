@@ -6,6 +6,7 @@
 #include <cstring>
 #include <stdint.h>
 #include <ctime>
+#include <cstdlib>
 
 #ifdef _MSC_VER
 #include <compat/msvc.h>
@@ -347,7 +348,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 
   //    uint32_t *hash_table = (uint32_t *) malloc(sizeof(uint32_t) *
   //    hash_size); memset(hash_table, 0, sizeof(uint32_t) * hash_size);
-  uint32_t hash_table[hash_size];
+  uint32_t *hash_table = (uint32_t*)malloc(hash_size * sizeof(uint32_t));
 
   memset(hash_table, 0, sizeof(uint32_t) * hash_size);
 #if PRINT_PERF
