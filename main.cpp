@@ -10,7 +10,6 @@
 #include <fcntl.h>
 #include <stdint.h>
 #ifdef _MSC_VER
-#include <compat/getopt.h>
 #include <compat/msvc.h>
 #else
 #include <unistd.h>
