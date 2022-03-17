@@ -90,10 +90,14 @@ usage:
   // Set output filedescriptor (stdout or file)
   int output_fd = fileno(stdout);
   if (cvalue != nullptr) {
+#ifdef _WIN32
+    output_fd = open(cvalue, O_RDWR | O_TRUNC | O_CREAT);
+#else
     output_fd = open(cvalue, O_RDWR | O_TRUNC | O_CREAT, S_IRGRP | S_IWGRP | S_IWUSR | S_IRUSR);
+#endif
     if (output_fd < 0)
     {
-      printf("Failed to open output file (%d)", output_fd);
+      printf("Failed to open output file (%d)\n", output_fd);
       return 1;
     }
   }
@@ -112,7 +116,10 @@ usage:
 	uint8_t *delta = (uint8_t*)malloc(delta_size);
 	int status = gencode(target_delta, target_delta_size, origin, origin_size, delta, &delta_size);
 
-	write(output_fd, delta, delta_size);
+	ssize_t wstatus = write(output_fd, delta, delta_size);
+	if (wstatus < 0) {
+		fprintf(stderr, "Failed to write delta to file (%zd)\n", wstatus);
+	}
 	free(delta);
 	return status;
   }
@@ -125,7 +132,10 @@ usage:
 	uint8_t *target = (uint8_t*)malloc(target_size);
 	int status = gdecode(target_delta, target_delta_size, origin, origin_size, target, &target_size);
 
-	write(output_fd, target, target_size);
+	ssize_t wstatus = write(output_fd, target, target_size);
+	if (wstatus < 0) {
+		fprintf(stderr, "Failed to write delta to file (%zd)\n", wstatus);
+	}
 	free(target);
 	return status;
   }

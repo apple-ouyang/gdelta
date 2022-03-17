@@ -4,7 +4,6 @@
 
 #ifndef GDELTA_GDELTA_H
 #define GDELTA_GDELTA_H
-
 #include <stdint.h>
 
 
