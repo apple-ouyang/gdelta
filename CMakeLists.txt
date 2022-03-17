@@ -4,10 +4,19 @@ project(Gdelta)
 include_directories(.)
 
 set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -O3 -Wall -Werror -Wextra -mno-ms-bitfields")
+set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS}")
+
 
 add_library(gdelta STATIC gdelta.cpp)
 add_executable(gdelta.exe main.cpp gdelta.cpp)
+
+target_compile_options(gdelta 
+	PRIVATE
+	  # MSVC
+	  $<IF:$<C_COMPILER_ID:MSVC>,
+            /Wall,
+            -O3 -Wall -Werror -Wextra -mno-ms-bitfields
+          >)
 
 install(TARGETS gdelta gdelta.exe)
 install(FILES gdelta.h DESTINATION include)
