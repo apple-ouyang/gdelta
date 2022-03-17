@@ -29,8 +29,11 @@
 
 // ctime
 #include <Windows.h>
-#define BILLION                             (1E9)
-struct timespec { long tv_sec; long tv_nsec; };
+#include <ctime>
+#define BILLION (1E9)
+#define CLOCK_MONOTONIC -1
+
+//struct timespec { long tv_sec; long tv_nsec; };
 
 static BOOL g_first_time = 1;
 static LARGE_INTEGER g_counts_per_sec;
