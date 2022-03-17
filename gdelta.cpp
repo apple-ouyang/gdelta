@@ -7,6 +7,10 @@
 #include <stdint.h>
 #include <ctime>
 
+#ifdef _MSC_VER
+#include <compat/msvc.h>
+#endif
+
 #include "gdelta.h"
 #include "gear_matrix.h"
 
