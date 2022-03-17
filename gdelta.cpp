@@ -5,7 +5,7 @@
 #include <cstdio>
 #include <cstring>
 #include <stdint.h>
-#include <sys/time.h>
+#include <ctime>
 
 #include "gdelta.h"
 #include "gear_matrix.h"
@@ -347,22 +347,23 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 
   memset(hash_table, 0, sizeof(uint32_t) * hash_size);
 #if PRINT_PERF
-  struct timeval t0, t1;
-  gettimeofday(&t0, NULL);
+  struct timespec t0, t1;
+  clock_gettime(CLOCK_MONOTONIC, &t0);
 #endif
 
   GFixSizeChunking(baseBuf + begSize, baseSize - begSize - endSize, beg,
                    begSize, hash_table, bit);
 #if PRINT_PERF
-  gettimeofday(&t1, NULL);
+
+  clock_gettime(CLOCK_MONOTONIC, &t1);
 
   fprintf(stderr, "size:%d\n",baseSize - begSize - endSize);
   fprintf(stderr, "hash size:%d\n",hash_size);
-  fprintf(stderr, "rolling hash:%.3fMB/s\n", (double)(baseSize - begSize - endSize)/1024/1024/((t1.tv_sec-t0.tv_sec) *1000000 + t1.tv_usec - t0.tv_usec)*1000000);
-  fprintf(stderr, "rooling hash:%lu\n", (t1.tv_sec-t0.tv_sec)*1000000 + t1.tv_usec - t0.tv_usec);
+  fprintf(stderr, "rolling hash:%.3fMB/s\n", (double)(baseSize - begSize - endSize)/1024/1024/((t1.tv_sec-t0.tv_sec) *1000000000 + t1.tv_nsec - t0.tv_nsec)*1000000000);
+  fprintf(stderr, "rooling hash:%lu\n", (t1.tv_sec-t0.tv_sec)*1000000000 + t1.tv_nsec - t0.tv_nsec);
 
-  gettimeofday(&t0, NULL);
-  fprintf(stderr, "hash table :%lu\n", (t0.tv_sec-t1.tv_sec) *1000000 + t0.tv_usec - t1.tv_usec);
+  clock_gettime(CLOCK_MONOTONIC, &t0);
+  fprintf(stderr, "hash table :%lu\n", (t0.tv_sec-t1.tv_sec) *1000000000 + t0.tv_nsec - t1.tv_nsec);
 #endif
   /* end of inserting */
 
@@ -636,9 +637,9 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   }
 
 #if PRINT_PERF
-  gettimeofday(&t1, NULL);
-  fprintf(stderr, "look up:%lu\n", (t1.tv_sec-t0.tv_sec) *1000000 + t1.tv_usec - t0.tv_usec); 
-  fprintf(stderr, "look up:%.3fMB/s\n", (double)(baseSize - begSize - endSize)/1024/1024/((t1.tv_sec-t0.tv_sec) *1000000 + t1.tv_usec - t0.tv_usec)*1000000);
+  clock_gettime(CLOCK_MONOTONIC, &t1);
+  fprintf(stderr, "look up:%lu\n", (t1.tv_sec-t0.tv_sec) *1000000000 + t1.tv_nsec - t0.tv_nsec); 
+  fprintf(stderr, "look up:%.3fMB/s\n", (double)(baseSize - begSize - endSize)/1024/1024/((t1.tv_sec-t0.tv_sec) *1000000000 + t1.tv_nsec - t0.tv_nsec)*1000000000);
 #endif
 
   if (flag == B16_LITERAL) {
