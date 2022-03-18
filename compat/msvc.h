@@ -1,6 +1,7 @@
 #ifndef MSVC_COMPAT_H
 #define MSVC_COMPAT_H
 
+
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -32,6 +33,10 @@
 #define BILLION (1E9)
 #define CLOCK_MONOTONIC -1
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct timespec { long tv_sec; long tv_nsec; };
 
 static BOOL g_first_time = 1;
@@ -39,5 +44,9 @@ static LARGE_INTEGER g_counts_per_sec;
 
 int clock_gettime(int dummy, struct timespec *ct);
 
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
