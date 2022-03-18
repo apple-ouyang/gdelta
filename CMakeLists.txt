@@ -7,8 +7,8 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS}")
 
 
-add_library(gdelta STATIC gdelta.cpp)
-add_executable(gdelta.exe main.cpp gdelta.cpp)
+add_library(gdelta STATIC gdelta.cpp $<IF:$<C_COMPILER_ID:MSVC>,compat/getopt.c compat/msvc.c,>)
+add_executable(gdelta.exe main.cpp gdelta)
 
 target_compile_options(gdelta 
 	PRIVATE
