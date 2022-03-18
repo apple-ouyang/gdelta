@@ -11,9 +11,6 @@ extern "C" {
  */
 int getopt(int nargc, char *const nargv[], const char *ostr);
 
-char *optarg;
-int opterr, optind, optopt, optreset;
-
 #ifdef __cplusplus
 }
 #endif
