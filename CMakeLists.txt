@@ -6,6 +6,10 @@ include_directories(.)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS}")
 
+if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0 -fprofile-arcs -ftest-coverage")
+endif() 
+
 
 add_library(gdelta STATIC gdelta.cpp $<IF:$<C_COMPILER_ID:MSVC>,compat/getopt.c compat/msvc.c,>)
 add_executable(gdelta.exe main.cpp gdelta.cpp $<IF:$<C_COMPILER_ID:MSVC>,compat/getopt.c compat/msvc.c,>)
