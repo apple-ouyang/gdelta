@@ -97,10 +97,15 @@ void write_field(BufferStreamDescriptor &buffer, const T& field)
   // TODO: check bounds (buffer->length)?
 }
 
-void write_subbuffer(BufferStreamDescriptor &dest, const BufferStreamDescriptor *src, size_t length) {
-  memcpy(dest.buf + dest.cursor, src->buf + src->cursor, length);
+void stream_into(BufferStreamDescriptor &dest, BufferStreamDescriptor &src, size_t length) {
+  memcpy(dest.buf + dest.cursor, src.buf + src.cursor, length);
   dest.cursor += length;
-  // TODO: should incr src cursor?
+  src.cursor += length;
+}
+
+void write_concat_buffer(BufferStreamDescriptor &dest, const BufferStreamDescriptor *src) {
+  memcpy(dest.buf + dest.cursor, src->buf, src->cursor);
+  dest.cursor += src->cursor;
 }
 
 int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize,
@@ -228,9 +233,10 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     endSize = 0;
   /* end of detect */
 
-  uint32_t deltaLen = 0;
-  BufferStreamDescriptor deltaStream = {deltaBuf, deltaLen, *deltaSize};
+  BufferStreamDescriptor deltaStream = {deltaBuf, 0, *deltaSize};
   BufferStreamDescriptor instStream = {instbuf,  inst_length, sizeof(instbuf)};
+  BufferStreamDescriptor dataStream = {databuf,  data_length, sizeof(databuf)};
+  BufferStreamDescriptor newStream = {newBuf,  begSize, newSize};
 
   if (begSize + endSize >= baseSize) {
     DeltaUnitOffset<FlagLengthB16> record1;
@@ -278,23 +284,19 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     }
     if (newSize - begSize - endSize > 0) {
       int litlen = newSize - begSize - endSize;
-      int copylen = 0;
       while (litlen > 16383) {
         unit_set_flag(&record2, B16_LITERAL);
         unit_set_length(&record2, 16383);
 	write_field(instStream, record2);
-        memcpy(databuf + data_length, newBuf + begSize + copylen, 16383);
+	stream_into(dataStream, newStream, 16383);
         litlen -= 16383;
-        data_length += 16383;
-        copylen += 16383;
       }
       if (litlen) {
         unit_set_flag(&record2, B16_LITERAL);
         unit_set_length(&record2, litlen);
 
 	write_field(instStream, record2);
-        memcpy(databuf + data_length, newBuf + begSize + copylen, litlen);
-        data_length += litlen;
+	stream_into(dataStream, newStream, litlen);
       }
     }
     if (end) {
@@ -316,31 +318,24 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
       }
     }
 
-    int instlen = 0;
-    if (1) {
-      deltaLen = 0;
-      uint16_t tmp = inst_length + sizeof(uint16_t);
-      instlen += sizeof(uint16_t);
+    int instlen = sizeof(uint16_t) * 2 + inst_length;
 
-      write_field(deltaStream, tmp);
-      // TODO: add positioning arg for write_subbuffer(deltaStream, instStream, instStream.tell);
-      memcpy(deltaBuf + deltaLen, instbuf, inst_length);
-      deltaLen += inst_length;
-      instlen += inst_length;
-      memcpy(deltaBuf + deltaLen, databuf, data_length);
-      deltaLen += data_length;
-    } else {
-      fprintf(stderr, "wrong instruction and data \n");
-    }
+    // TODO: overwrites BegSize < 64 path??
+    deltaStream.cursor = 0;
+    dataStream.cursor = 0;
+    instStream.cursor = 0;
 
-    *deltaSize = deltaLen;
+    uint16_t tmp = inst_length + sizeof(uint16_t);
+    write_field(deltaStream, tmp);
+    stream_into(deltaStream, instStream, inst_length);
+    stream_into(deltaStream, dataStream, data_length);
 
+    *deltaSize = sizeof(uint16_t) + inst_length + data_length;
     return instlen;
   }
 
   /* chunk the baseFile */
-
-  deltaLen = 0;
+  uint32_t deltaLen = 0;
   int tmp = (baseSize - begSize - endSize) + 10;
 
   int bit;
