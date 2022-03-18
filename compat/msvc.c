@@ -25,3 +25,4 @@ int clock_gettime(int dummy, struct timespec *ct)
 
     return 0;
 }
+

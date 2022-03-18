@@ -5,11 +5,12 @@
 #include <cstdio>
 #include <cstring>
 #include <stdint.h>
-#include <ctime>
 #include <cstdlib>
 
 #ifdef _MSC_VER
 #include <compat/msvc.h>
+#else
+#include <ctime>
 #endif
 
 #include "gdelta.h"
