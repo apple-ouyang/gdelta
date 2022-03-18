@@ -9,7 +9,12 @@
 #include <ctype.h>
 #include <fcntl.h>
 #include <stdint.h>
+#ifdef _MSC_VER
+#include <compat/msvc.h>
+#include <compat/getopt.h>
+#else
 #include <unistd.h>
+#endif
 
 int load_file_to_memory(const char *filename, uint8_t **result) {
   FILE *f = fopen(filename, "rb");
