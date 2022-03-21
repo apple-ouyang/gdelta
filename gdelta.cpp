@@ -743,8 +743,8 @@ int gdecode(uint8_t *deltaBuf,  uint32_t, uint8_t *baseBuf,
   uint32_t instructionlenth = addatalenth;
 
   int matchnum = 0;
-  uint32_t matchlength = 0;
-  uint32_t unmatchlength = 0;
+  // uint32_t matchlength = 0;
+  // uint32_t unmatchlength = 0;
   int unmatchnum = 0;
   while (1) {
     uint16_t flag = unit_get_flag_raw(deltaBuf + readLength);
@@ -756,7 +756,7 @@ int gdecode(uint8_t *deltaBuf,  uint32_t, uint8_t *baseBuf,
 
       readLength += sizeof(DeltaUnitOffset<FlagLengthB16>);
 
-      matchlength += unit_get_length(&record);
+      // matchlength += unit_get_length(&record);
 
       memcpy(outBuf + dataLength, baseBuf + record.nOffset,
              unit_get_length(&record));
@@ -770,7 +770,7 @@ int gdecode(uint8_t *deltaBuf,  uint32_t, uint8_t *baseBuf,
 
       readLength += sizeof(DeltaUnit<FlagLengthB16>);
 
-      unmatchlength += unit_get_length(&record);
+      // unmatchlength += unit_get_length(&record);
 
       memcpy(outBuf + dataLength, deltaBuf + addatalenth,
              unit_get_length(&record));
@@ -789,7 +789,7 @@ int gdecode(uint8_t *deltaBuf,  uint32_t, uint8_t *baseBuf,
 
       // printf("offset: %d\n",record.nOffset);
 
-      matchlength += unit_get_length(&record);
+      // matchlength += unit_get_length(&record);
 
       memcpy(outBuf + dataLength, baseBuf + record.nOffset,
              unit_get_length(&record));
@@ -809,7 +809,7 @@ int gdecode(uint8_t *deltaBuf,  uint32_t, uint8_t *baseBuf,
       // printf("unmatch length:%d\n",get_length(&record));
       addatalenth += unit_get_length(&record);
       dataLength += unit_get_length(&record);
-      unmatchlength += unit_get_length(&record);
+      // unmatchlength += unit_get_length(&record);
     }
 
     if (readLength >= instructionlenth) {
