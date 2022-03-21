@@ -5,7 +5,13 @@
 #include <cstdio>
 #include <cstring>
 #include <stdint.h>
-#include <sys/time.h>
+#include <cstdlib>
+
+#ifdef _MSC_VER
+#include <compat/msvc.h>
+#else
+#include <ctime>
+#endif
 
 #include "gdelta.h"
 #include "gear_matrix.h"
@@ -17,13 +23,14 @@
 
 #define PRINT_PERF 1
 
+#pragma pack(push,1)
 typedef struct {
   uint8_t flag: 2;
   uint8_t length: 6;
 } FlagLengthB8;
 
 typedef struct {
-  uint8_t flag: 2;
+  uint16_t flag: 2;
   uint16_t length: 14;
 } FlagLengthB16;
 
@@ -34,11 +41,12 @@ struct DeltaUnit
 };
 
 template<typename var>
-struct __attribute__((packed)) DeltaUnitOffset
+struct DeltaUnitOffset
 {
   var flag_length;
   uint16_t nOffset; // Unused in LITERAL variants
 };
+#pragma pack(pop)
 
 static_assert(sizeof(DeltaUnitOffset<FlagLengthB8>) == 3, "Expected DeltaUnit<B8> to be 3 bytes");
 static_assert(sizeof(DeltaUnitOffset<FlagLengthB16>) == 4, "Expected DeltaUnit<B16> to be 4 bytes");
@@ -341,26 +349,27 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 
   //    uint32_t *hash_table = (uint32_t *) malloc(sizeof(uint32_t) *
   //    hash_size); memset(hash_table, 0, sizeof(uint32_t) * hash_size);
-  uint32_t hash_table[hash_size];
+  uint32_t *hash_table = (uint32_t*)malloc(hash_size * sizeof(uint32_t));
 
   memset(hash_table, 0, sizeof(uint32_t) * hash_size);
 #if PRINT_PERF
-  struct timeval t0, t1;
-  gettimeofday(&t0, NULL);
+  struct timespec t0, t1;
+  clock_gettime(CLOCK_MONOTONIC, &t0);
 #endif
 
   GFixSizeChunking(baseBuf + begSize, baseSize - begSize - endSize, beg,
                    begSize, hash_table, bit);
 #if PRINT_PERF
-  gettimeofday(&t1, NULL);
+
+  clock_gettime(CLOCK_MONOTONIC, &t1);
 
   fprintf(stderr, "size:%d\n",baseSize - begSize - endSize);
   fprintf(stderr, "hash size:%d\n",hash_size);
-  fprintf(stderr, "rolling hash:%.3fMB/s\n", (double)(baseSize - begSize - endSize)/1024/1024/((t1.tv_sec-t0.tv_sec) *1000000 + t1.tv_usec - t0.tv_usec)*1000000);
-  fprintf(stderr, "rooling hash:%lu\n", (t1.tv_sec-t0.tv_sec)*1000000 + t1.tv_usec - t0.tv_usec);
+  fprintf(stderr, "rolling hash:%.3fMB/s\n", (double)(baseSize - begSize - endSize)/1024/1024/((t1.tv_sec-t0.tv_sec) *1000000000 + t1.tv_nsec - t0.tv_nsec)*1000000000);
+  fprintf(stderr, "rooling hash:%zd\n", (t1.tv_sec-t0.tv_sec)*1000000000 + t1.tv_nsec - t0.tv_nsec);
 
-  gettimeofday(&t0, NULL);
-  fprintf(stderr, "hash table :%lu\n", (t0.tv_sec-t1.tv_sec) *1000000 + t0.tv_usec - t1.tv_usec);
+  clock_gettime(CLOCK_MONOTONIC, &t0);
+  fprintf(stderr, "hash table :%zd\n", (t0.tv_sec-t1.tv_sec) *1000000000 + t0.tv_nsec - t1.tv_nsec);
 #endif
   /* end of inserting */
 
@@ -634,9 +643,9 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   }
 
 #if PRINT_PERF
-  gettimeofday(&t1, NULL);
-  fprintf(stderr, "look up:%lu\n", (t1.tv_sec-t0.tv_sec) *1000000 + t1.tv_usec - t0.tv_usec); 
-  fprintf(stderr, "look up:%.3fMB/s\n", (double)(baseSize - begSize - endSize)/1024/1024/((t1.tv_sec-t0.tv_sec) *1000000 + t1.tv_usec - t0.tv_usec)*1000000);
+  clock_gettime(CLOCK_MONOTONIC, &t1);
+  fprintf(stderr, "look up:%zd\n", (t1.tv_sec-t0.tv_sec) *1000000000 + t1.tv_nsec - t0.tv_nsec); 
+  fprintf(stderr, "look up:%.3fMB/s\n", (double)(baseSize - begSize - endSize)/1024/1024/((t1.tv_sec-t0.tv_sec) *1000000000 + t1.tv_nsec - t0.tv_nsec)*1000000000);
 #endif
 
   if (flag == B16_LITERAL) {
