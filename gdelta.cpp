@@ -334,21 +334,13 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 
   /* chunk the baseFile */
   int tmp = (baseSize - begSize - endSize) + 10;
-
   int bit;
   for (bit = 0; tmp; bit++) tmp >>= 1;
-  
-
   uint64_t xxsize = 0XFFFFFFFFFFFFFFFF >> (64 - bit); // mask
-
-  // uint32_t hash_size=0XFFFFFFFF>>(32-tmp);
   uint32_t hash_size = xxsize + 1;
-
-  //    uint32_t *hash_table = (uint32_t *) malloc(sizeof(uint32_t) *
-  //    hash_size); memset(hash_table, 0, sizeof(uint32_t) * hash_size);
   uint32_t *hash_table = (uint32_t*)malloc(hash_size * sizeof(uint32_t));
-
   memset(hash_table, 0, sizeof(uint32_t) * hash_size);
+
 #if PRINT_PERF
   struct timespec t0, t1;
   clock_gettime(CLOCK_MONOTONIC, &t0);
@@ -396,18 +388,12 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
       record3.nOffset = 0;
       unit_set_length(&record3, begSize);
       write_field(instStream, record3.flag_length);
-//      memcpy(instbuf + inst_length, &record3.flag_length, sizeof(record3.flag_length));
-//      inst_length += sizeof(record3.flag_length);
       write_field(instStream, record3.nOffset);
-//      memcpy(instbuf + inst_length, &record3.nOffset, sizeof(record3.nOffset));
-//      inst_length += sizeof(record3.nOffset);
       flag = 1;
     } else if (begSize < 16384) {
       record1.nOffset = 0;
       unit_set_length(&record1, begSize);
       write_field(instStream, record1);
-//      memcpy(instbuf + inst_length, &record1, sizeof(DeltaUnitOffset<FlagLengthB16>));
-//      inst_length += sizeof(DeltaUnitOffset<FlagLengthB16>);
       flag = 1;
     } else {
       int matchlen = begSize;
@@ -420,16 +406,12 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
         offset += 16383;
         matchlen -= 16383;
 	write_field(instStream, record1);
-//	memcpy(instbuf + inst_length, &record1, sizeof(DeltaUnitOffset<FlagLengthB16>));
-//      inst_length += sizeof(DeltaUnitOffset<FlagLengthB16>);
       }
       if (matchlen) {
         unit_set_flag(&record1, B16_OFFSET);
         record1.nOffset = offset;
         unit_set_length(&record1, matchlen);
 	write_field(instStream, record1);
-//        memcpy(instbuf + inst_length, &record1, sizeof(DeltaUnitOffset<FlagLengthB16>));
-//        inst_length += sizeof(DeltaUnitOffset<FlagLengthB16>);
       }
     }
   }
@@ -471,11 +453,8 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
             unmatch64flag = 1;
             unit_set_length(&record4, unit_get_length(&record2));
 	    write_field(instStream, record4);
-//            memcpy(instbuf + inst_length - sizeof(DeltaUnit<FlagLengthB16>), &record4,sizeof(DeltaUnit<FlagLengthB8>));
-//            inst_length -= 1;
           } else {
 	    write_field(instStream, record2);
-//            memcpy(instbuf + inst_length - sizeof(DeltaUnit<FlagLengthB16>), &record2, sizeof(DeltaUnit<FlagLengthB16>));
           }
         }
 
@@ -520,14 +499,11 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 
         if (k > 0) {
           dataStream.cursor -= unit_get_length(&record2);
-          //data_length -= unit_get_length(&record2);
 
           if (unmatch64flag) {
 	    instStream.cursor -= sizeof(DeltaUnit<FlagLengthB8>);
-//            inst_length -= sizeof(DeltaUnit<FlagLengthB8>);
           } else {
 	    instStream.cursor -= sizeof(DeltaUnit<FlagLengthB16>);
-//            inst_length -= sizeof(DeltaUnit<FlagLengthB16>);
           }
           unmatch64flag = 0;
           unit_set_length(&record2, unit_get_length(&record2) - k);
@@ -535,17 +511,12 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
           if (unit_get_length(&record2) > 0) {
             if (unit_get_length(&record2) >= 64) {
 	      write_field(instStream, record2);
-//              memcpy(instbuf + inst_length, &record2, sizeof(DeltaUnit<FlagLengthB16>));
-//              inst_length += sizeof(DeltaUnit<FlagLengthB16>);
             } else {
               unit_set_length(&record4, unit_get_length(&record2));
 	      write_field(instStream, record4);
-//              memcpy(instbuf + inst_length, &record4, sizeof(DeltaUnit<FlagLengthB8>));
-//              inst_length += sizeof(DeltaUnit<FlagLengthB8>);
             }
 
             dataStream.cursor += unit_get_length(&record2);
-//            data_length += unit_get_length(&record2);
           }
 
           matchlen += k;
@@ -556,16 +527,10 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
           record3.nOffset = record1.nOffset;
           unit_set_length(&record3, matchlen);
 	  write_field(instStream, record3.flag_length);
-//          memcpy(instbuf + inst_length, &record3.flag_length, sizeof(record3.flag_length));
-//          inst_length += sizeof(record3.flag_length);
           write_field(instStream, record3.nOffset);
-//          memcpy(instbuf + inst_length, &record3.nOffset, sizeof(record3.nOffset));
-//          inst_length += sizeof(record3.nOffset);
         } else if (matchlen < 16384) {
           unit_set_length(&record1, matchlen);
 	  write_field(instStream, record1);
-//          memcpy(instbuf + inst_length, &record1, sizeof(DeltaUnitOffset<FlagLengthB16>));
-//          inst_length += sizeof(DeltaUnitOffset<FlagLengthB16>);
         } else {
           offset = record1.nOffset;
           while (matchlen > 16383) {
@@ -574,15 +539,11 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
             offset += 16383;
             matchlen -= 16383;
 	    write_field(instStream, record1);
-//            memcpy(instbuf + inst_length, &record1, sizeof(DeltaUnitOffset<FlagLengthB16>));
-//            inst_length += sizeof(DeltaUnitOffset<FlagLengthB16>);
           }
           if (matchlen) {
             record1.nOffset = offset;
             unit_set_length(&record1, matchlen);
 	    write_field(instStream, record1);
-//            memcpy(instbuf + inst_length, &record1, sizeof(DeltaUnitOffset<FlagLengthB16>));
-//            inst_length += sizeof(DeltaUnitOffset<FlagLengthB16>);
           }
         }
         unmatch64flag = 0;
@@ -603,12 +564,9 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
         } else {
 	  instStream.cursor -= sizeof(record2);
 	  write_field(instStream, record2);
-//          memcpy(instbuf + inst_length - sizeof(DeltaUnit<FlagLengthB16>), &record2, sizeof(DeltaUnit<FlagLengthB16>));
           handlebytes += 1;
           unit_set_length(&record2, 1);
 	  write_field(instStream, record2);
-//          memcpy(instbuf + inst_length, &record2, sizeof(DeltaUnit<FlagLengthB16>));
-//          inst_length += sizeof(DeltaUnit<FlagLengthB16>);
           memcpy(dataStream.buf + dataStream.cursor, newBuf + inputPos, 1);
           dataStream.cursor += 1;
         }
@@ -617,8 +575,6 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
         handlebytes += 1;
         unit_set_length(&record2, 1);
 	write_field(instStream, record2);
-//        memcpy(instbuf + inst_length, &record2, sizeof(DeltaUnit<FlagLengthB16>));
-//        inst_length += sizeof(DeltaUnit<FlagLengthB16>);
         memcpy(dataStream.buf + dataStream.cursor, newBuf + inputPos, 1);
         dataStream.cursor += 1;
         flag = 2;
@@ -655,8 +611,6 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   if (flag == B16_LITERAL) {
     newStream.cursor = handlebytes;
     stream_into(dataStream, newStream, newSize - endSize - handlebytes);
-    //memcpy(databuf + data_length, newBuf + handlebytes, newSize - endSize - handlebytes);
-    //data_length += (newSize - endSize - handlebytes);
 
     int litlen = unit_get_length(&record2) + (newSize - endSize - handlebytes);
     if (litlen < 16384) {
@@ -664,16 +618,12 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
       instStream.cursor -= sizeof(record2);
       write_field(instStream, record2);
 
-//      memcpy(instbuf + inst_length - sizeof(DeltaUnit<FlagLengthB16>), &record2, sizeof(DeltaUnit<FlagLengthB16>));
     } else {
       unit_set_length(&record2, 16383);
       instStream.cursor -= sizeof(record2);
       write_field(instStream, record2);
-//      memcpy(instbuf + inst_length - sizeof(DeltaUnit<FlagLengthB16>), &record2, sizeof(DeltaUnit<FlagLengthB16>));
       unit_set_length(&record2, litlen - 16383);
       write_field(instStream, record2);
-//      memcpy(instbuf + inst_length, &record2, sizeof(DeltaUnit<FlagLengthB16>));
-//      inst_length += sizeof(DeltaUnit<FlagLengthB16>);
     }
 
   } else {
@@ -681,13 +631,9 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
       unit_set_length(&record2, newSize - endSize - handlebytes);
 
       write_field(instStream, record2);
-//      memcpy(instbuf + inst_length, &record2, sizeof(DeltaUnit<FlagLengthB16>));
-//      inst_length += sizeof(DeltaUnit<FlagLengthB16>);
 
       newStream.cursor = inputPos;
       stream_into(dataStream, newStream, newSize - endSize - handlebytes);
-//      memcpy(databuf + data_length, newBuf + inputPos, newSize - endSize - handlebytes);
-//      data_length += newSize - endSize - handlebytes;
     }
   }
 
@@ -701,15 +647,11 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
       offset += 16383;
       matchlen -= 16383;
       write_field(instStream, record1);
-//      memcpy(instbuf + inst_length, &record1, sizeof(DeltaUnitOffset<FlagLengthB16>));
-//      inst_length += sizeof(DeltaUnitOffset<FlagLengthB16>);
     }
     if (matchlen) {
       record1.nOffset = offset;
       unit_set_length(&record1, matchlen);
       write_field(instStream, record1);
-//      memcpy(instbuf + inst_length, &record1, sizeof(DeltaUnitOffset<FlagLengthB16>));
-//      inst_length += sizeof(DeltaUnitOffset<FlagLengthB16>);
     }
   }
 
@@ -733,76 +675,45 @@ int gdecode(uint8_t *deltaBuf,  uint32_t, uint8_t *baseBuf,
 
   /* datalength is the cursor of outBuf, and readLength deltaBuf */
   uint32_t dataLength = 0, readLength = sizeof(uint16_t);
+  uint32_t addDataLength = 0;
+  memcpy(&addDataLength, deltaBuf, sizeof(uint16_t));
+  uint32_t instructionlenth = addDataLength;
 
-  uint32_t addatalenth = 0;
-  memcpy(&addatalenth, deltaBuf, sizeof(uint16_t));
-  uint32_t instructionlenth = addatalenth;
-
-  int matchnum = 0;
-  uint32_t matchlength = 0;
-  uint32_t unmatchlength = 0;
-  int unmatchnum = 0;
   while (1) {
     uint16_t flag = unit_get_flag_raw(deltaBuf + readLength);
 
     if (flag == B16_OFFSET) { // Matched Offset Literal 16b length
-      matchnum++;
       DeltaUnitOffset<FlagLengthB16> record;
       memcpy(&record, deltaBuf + readLength, sizeof(DeltaUnitOffset<FlagLengthB16>));
-
       readLength += sizeof(DeltaUnitOffset<FlagLengthB16>);
-      matchlength += unit_get_length(&record);
-      memcpy(outBuf + dataLength, baseBuf + record.nOffset,
-             unit_get_length(&record));
-      // printf("match length:%d\n",get_length(&record));
+
+      memcpy(outBuf + dataLength, baseBuf + record.nOffset, unit_get_length(&record));
       dataLength += unit_get_length(&record);
     } else if (flag == B16_LITERAL) { // Unmatched Literal 16b length
-      unmatchnum++;
       DeltaUnit<FlagLengthB16> record;
       memcpy(&record, deltaBuf + readLength, sizeof(DeltaUnit<FlagLengthB16>));
-
       readLength += sizeof(DeltaUnit<FlagLengthB16>);
 
-      unmatchlength += unit_get_length(&record);
-
-      memcpy(outBuf + dataLength, deltaBuf + addatalenth,
-             unit_get_length(&record));
-
-      // printf("unmatch length:%d\n",get_length(&record));
-      addatalenth += unit_get_length(&record);
+      memcpy(outBuf + dataLength, deltaBuf + addDataLength, unit_get_length(&record));
+      addDataLength += unit_get_length(&record);
       dataLength += unit_get_length(&record);
     } else if (flag == B8_OFFSET) { // Matched Offset Literal 8b length
-
-      matchnum++;
       DeltaUnitOffset<FlagLengthB8> record;
       memcpy(&record.flag_length, deltaBuf + readLength, sizeof(record.flag_length));
       readLength += sizeof(record.flag_length);
       memcpy(&record.nOffset, deltaBuf + readLength, sizeof(record.nOffset));
       readLength += sizeof(record.nOffset);
 
-      // printf("offset: %d\n",record.nOffset);
-
-      matchlength += unit_get_length(&record);
-
-      memcpy(outBuf + dataLength, baseBuf + record.nOffset,
-             unit_get_length(&record));
-
-      // printf("match length:%d\n",get_length(&record));
+      memcpy(outBuf + dataLength, baseBuf + record.nOffset, unit_get_length(&record));
       dataLength += unit_get_length(&record);
     } else if (flag == B8_LITERAL) { // Unmatched Literal 8b length
-      unmatchnum++;
       DeltaUnit<FlagLengthB8> record;
       memcpy(&record, deltaBuf + readLength, sizeof(DeltaUnit<FlagLengthB8>));
-
       readLength += sizeof(DeltaUnit<FlagLengthB8>);
 
-      memcpy(outBuf + dataLength, deltaBuf + addatalenth,
-             unit_get_length(&record));
-
-      // printf("unmatch length:%d\n",get_length(&record));
-      addatalenth += unit_get_length(&record);
+      memcpy(outBuf + dataLength, deltaBuf + addDataLength, unit_get_length(&record));
+      addDataLength += unit_get_length(&record);
       dataLength += unit_get_length(&record);
-      unmatchlength += unit_get_length(&record);
     }
 
     if (readLength >= instructionlenth) {
