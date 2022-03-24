@@ -20,6 +20,8 @@
 #define FPTYPE uint64_t
 #define STRLOOK 16
 #define STRLSTEP 2
+#define LEN_LIMIT ((2 << 13) - 1)
+#define SHORT_LEN_LIMIT ((2 << 5) - 1)
 
 #define PRINT_PERF 1
 
@@ -122,7 +124,6 @@ int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize,
   FPTYPE fingerprint = 0;
 
   /** GEAR **/
-
   for (; i < STRLOOK; i++) {
     fingerprint = (fingerprint << (movebitlength)) + GEARmx[data[i]];
   }
@@ -145,10 +146,7 @@ int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize,
         }
       }
       /** GEAR **/
-
-      fingerprint =
-          (fingerprint << (movebitlength)) + GEARmx[data[i + STRLOOK]];
-
+      fingerprint = (fingerprint << (movebitlength)) + GEARmx[data[i + STRLOOK]];
       i++;
       flag++;
     }
@@ -168,10 +166,7 @@ int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize,
         }
       }
       /** GEAR **/
-
-      fingerprint =
-          (fingerprint << (movebitlength)) + GEARmx[data[i + STRLOOK]];
-
+      fingerprint = (fingerprint << (movebitlength)) + GEARmx[data[i + STRLOOK]];
       i++;
       flag++;
     }
@@ -190,17 +185,18 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     fprintf(stderr, "Gdelta not support size >= 64KB.\n");
   }
 
+  // Align baseBuf and newBuf
   while (begSize + sizeof(uint64_t) <= baseSize && begSize + sizeof(uint64_t) <= newSize) {
-    if (*(uint64_t *)(baseBuf + begSize) == *(uint64_t *)(newBuf + begSize)) {
-      begSize += sizeof(uint64_t);
-    } else
+    if (*(uint64_t *)(baseBuf + begSize) != *(uint64_t *)(newBuf + begSize)) 
       break;
+
+    begSize += sizeof(uint64_t);
   }
   while (begSize < baseSize && begSize < newSize) {
-    if (baseBuf[begSize] == newBuf[begSize]) {
-      begSize++;
-    } else
+    if (baseBuf[begSize] != newBuf[begSize])
       break;
+
+    begSize++;
   }
 
   if (begSize > 16)
@@ -209,17 +205,15 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     begSize = 0;
 
   while (endSize + sizeof(uint64_t) <= baseSize && endSize + sizeof(uint64_t) <= newSize) {
-    if (*(uint64_t *)(baseBuf + baseSize - endSize - sizeof(uint64_t)) ==
-        *(uint64_t *)(newBuf + newSize - endSize - sizeof(uint64_t))) {
-      endSize += sizeof(uint64_t);
-    } else
+    if (*(uint64_t *)(baseBuf + baseSize - endSize - sizeof(uint64_t)) !=
+        *(uint64_t *)(newBuf + newSize - endSize - sizeof(uint64_t))) 
       break;
+    endSize += sizeof(uint64_t);
   }
   while (endSize < baseSize && endSize < newSize) {
-    if (baseBuf[baseSize - endSize - 1] == newBuf[newSize - endSize - 1]) {
-      endSize++;
-    } else
+    if (baseBuf[baseSize - endSize - 1] != newBuf[newSize - endSize - 1])
       break;
+    endSize++;
   }
 
   if (begSize + endSize > newSize)
@@ -243,7 +237,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     //DeltaUnit<FlagLengthB8> record4;
 
     if (beg) {
-      if (begSize < 64) {
+      if (begSize < SHORT_LEN_LIMIT) {
         unit_set_flag(&record3, B8_OFFSET);
         record3.nOffset = 0;
         unit_set_length(&record3, begSize);
@@ -253,7 +247,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 
 	write_field(instStream, record3.flag_length);
 	write_field(instStream, record3.nOffset);
-      } else if (begSize <= 16383) {
+      } else if (begSize <= LEN_LIMIT) {
         unit_set_flag(&record1, B16_OFFSET);
         record1.nOffset = 0;
         unit_set_length(&record1, begSize);
@@ -261,15 +255,14 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 	write_field(deltaStream, record1);
 	write_field(instStream, record1);
       } else { // TODO: > 16383
-
         int matchlen = begSize;
         int offset = 0;
-        while (matchlen > 16383) {
+        while (matchlen > LEN_LIMIT) {
           unit_set_flag(&record1, B16_OFFSET);
           record1.nOffset = offset;
-          unit_set_length(&record1, 16383);
-          offset += 16383;
-          matchlen -= 16383;
+          unit_set_length(&record1, LEN_LIMIT);
+          offset += LEN_LIMIT;
+          matchlen -= LEN_LIMIT;
 	  write_field(instStream, record1);
         }
         if (matchlen) {
@@ -282,12 +275,12 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     }
     if (newSize - begSize - endSize > 0) {
       int litlen = newSize - begSize - endSize;
-      while (litlen > 16383) {
+      while (litlen > LEN_LIMIT) {
         unit_set_flag(&record2, B16_LITERAL);
-        unit_set_length(&record2, 16383);
+        unit_set_length(&record2, LEN_LIMIT);
 	write_field(instStream, record2);
-	stream_into(dataStream, newStream, 16383);
-        litlen -= 16383;
+	stream_into(dataStream, newStream, LEN_LIMIT);
+        litlen -= LEN_LIMIT;
       }
       if (litlen) {
         unit_set_flag(&record2, B16_LITERAL);
@@ -300,12 +293,12 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     if (end) {
       int matchlen = endSize;
       int offset = baseSize - endSize;
-      while (matchlen > 16383) {
+      while (matchlen > LEN_LIMIT) {
         unit_set_flag(&record1, B16_OFFSET);
         record1.nOffset = offset;
-        unit_set_length(&record1, 16383);
-        offset += 16383;
-        matchlen -= 16383;
+        unit_set_length(&record1, LEN_LIMIT);
+        offset += LEN_LIMIT;
+        matchlen -= LEN_LIMIT;
 	write_field(instStream, record1);
       }
       if (matchlen) {
@@ -384,13 +377,13 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   else
     movebitlength = sizeof(FPTYPE) * 8 / STRLOOK + 1;
   if (beg) {
-    if (begSize < 64) {
+    if (begSize <= SHORT_LEN_LIMIT) {
       record3.nOffset = 0;
       unit_set_length(&record3, begSize);
       write_field(instStream, record3.flag_length);
       write_field(instStream, record3.nOffset);
       flag = 1;
-    } else if (begSize < 16384) {
+    } else if (begSize <= LEN_LIMIT) {
       record1.nOffset = 0;
       unit_set_length(&record1, begSize);
       write_field(instStream, record1);
@@ -399,12 +392,12 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
       int matchlen = begSize;
       int offset = 0;
       flag = 1;
-      while (matchlen > 16383) {
+      while (matchlen > LEN_LIMIT) {
         unit_set_flag(&record1, B16_OFFSET);
         record1.nOffset = offset;
-        unit_set_length(&record1, 16383);
-        offset += 16383;
-        matchlen -= 16383;
+        unit_set_length(&record1, LEN_LIMIT);
+        offset += LEN_LIMIT;
+        matchlen -= LEN_LIMIT;
 	write_field(instStream, record1);
       }
       if (matchlen) {
@@ -449,7 +442,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
       if (1) {
         if (flag == B16_LITERAL) {
 	  instStream.cursor -= sizeof(DeltaUnit<FlagLengthB16>);
-          if (unit_get_length(&record2) <= 63) {
+          if (unit_get_length(&record2) <= SHORT_LEN_LIMIT) {
             unmatch64flag = 1;
             unit_set_length(&record4, unit_get_length(&record2));
 	    write_field(instStream, record4);
@@ -509,7 +502,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
           unit_set_length(&record2, unit_get_length(&record2) - k);
 
           if (unit_get_length(&record2) > 0) {
-            if (unit_get_length(&record2) >= 64) {
+            if (unit_get_length(&record2) > SHORT_LEN_LIMIT) {
 	      write_field(instStream, record2);
             } else {
               unit_set_length(&record4, unit_get_length(&record2));
@@ -523,21 +516,21 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
           record1.nOffset -= k;
         }
 
-        if (matchlen < 64) {
+        if (matchlen <= SHORT_LEN_LIMIT) {
           record3.nOffset = record1.nOffset;
           unit_set_length(&record3, matchlen);
 	  write_field(instStream, record3.flag_length);
           write_field(instStream, record3.nOffset);
-        } else if (matchlen < 16384) {
+        } else if (matchlen <= LEN_LIMIT) {
           unit_set_length(&record1, matchlen);
 	  write_field(instStream, record1);
         } else {
           offset = record1.nOffset;
-          while (matchlen > 16383) {
+          while (matchlen > LEN_LIMIT) {
             record1.nOffset = offset;
-            unit_set_length(&record1, 16383);
-            offset += 16383;
-            matchlen -= 16383;
+            unit_set_length(&record1, LEN_LIMIT);
+            offset += LEN_LIMIT;
+            matchlen -= LEN_LIMIT;
 	    write_field(instStream, record1);
           }
           if (matchlen) {
@@ -555,7 +548,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     } else {
     handle_hash_error:
       if (flag == B16_LITERAL) {
-        if (unit_get_length(&record2) < 16383) {
+        if (unit_get_length(&record2) < LEN_LIMIT) {
           memcpy(dataStream.buf + dataStream.cursor, newBuf + inputPos, 1);
           dataStream.cursor += 1;
           handlebytes += 1;
@@ -613,16 +606,16 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     stream_into(dataStream, newStream, newSize - endSize - handlebytes);
 
     int litlen = unit_get_length(&record2) + (newSize - endSize - handlebytes);
-    if (litlen < 16384) {
+    if (litlen <= LEN_LIMIT) {
       unit_set_length(&record2, litlen);
       instStream.cursor -= sizeof(record2);
       write_field(instStream, record2);
 
     } else {
-      unit_set_length(&record2, 16383);
+      unit_set_length(&record2, LEN_LIMIT);
       instStream.cursor -= sizeof(record2);
       write_field(instStream, record2);
-      unit_set_length(&record2, litlen - 16383);
+      unit_set_length(&record2, litlen - LEN_LIMIT);
       write_field(instStream, record2);
     }
 
@@ -640,12 +633,12 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   if (end) {
     int matchlen = endSize;
     int offset = baseSize - endSize;
-    while (matchlen > 16383) {
+    while (matchlen > LEN_LIMIT) {
       unit_set_flag(&record1, B16_OFFSET);
       record1.nOffset = offset;
-      unit_set_length(&record1, 16383);
-      offset += 16383;
-      matchlen -= 16383;
+      unit_set_length(&record1, LEN_LIMIT);
+      offset += LEN_LIMIT;
+      matchlen -= LEN_LIMIT;
       write_field(instStream, record1);
     }
     if (matchlen) {
