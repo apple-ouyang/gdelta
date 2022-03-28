@@ -4,10 +4,12 @@ project(Gdelta)
 include_directories(.)
 
 set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Werror -Wall -Wpedantic -Wextra")
 
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0 -fprofile-arcs -ftest-coverage")
+else()
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 endif() 
 
 
