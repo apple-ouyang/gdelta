@@ -42,7 +42,46 @@ template <typename var> struct DeltaUnitOffset {
   var flag_length;
   uint16_t nOffset;
 };
+
+
+/*
+ * ABI:
+ *
+ * VarInt<N>: more 1 | pval N [more| VarInt<7>]
+ * DeltaHead: flag 1 | VarInt<6>
+ * DeltaUnit: DeltaHead [DeltaHead.flag| VarInt<7>]
+ *
+ * VarInt <- Val, Offset = Val | VarInt[i].pval << Offset, Offset + VarInt[i]::N
+ */
+template <uint8_t FLAGLEN> 
+struct _DeltaHead {
+  uint8_t flag: FLAGLEN;
+  uint8_t more: 1;
+  uint8_t length: (7-FLAGLEN);
+  const static uint8_t lenbits = FLAGLEN;
+};
+
+typedef _DeltaHead<1> DeltaHeadUnit;
+
+typedef struct _VarIntPart {
+  uint8_t more: 1;
+  uint8_t subint: 7;
+  const static uint8_t lenbits = 7;
+} VarIntPart;
+
 #pragma pack(pop)
+
+typedef struct {
+  uint8_t flag;
+  uint64_t length;
+  uint64_t offset;
+} DeltaUnitMem;
+
+// DeltaUnit/FlaggedVarInt: flag: 1, more: 1, len: 6
+// VarInt: more: 1, len: 7
+static_assert(sizeof(DeltaHeadUnit) == 1, "Expected DeltaHeads to be 1 byte");
+static_assert(sizeof(VarIntPart) == 1, "Expected VarInt to be 1 byte");
+
 
 static_assert(sizeof(DeltaUnitOffset<FlagLengthB8>) == 3,
               "Expected DeltaUnit<B8> to be 3 bytes");
@@ -115,6 +154,63 @@ void write_concat_buffer(BufferStreamDescriptor &dest, const BufferStreamDescrip
   memcpy(dest.buf + dest.cursor, src.buf, src.cursor);
   dest.cursor += src.cursor;
 }
+
+inline uint64_t read_varint(BufferStreamDescriptor& buffer) {
+  VarIntPart vi;
+  uint64_t val = 0;
+  uint8_t offset = 0;
+  do {
+    read_field(buffer, vi);
+    val |= vi.subint << offset;
+    offset += VarIntPart::lenbits;
+  } while(vi.more);
+  return val;
+}
+
+inline void read_unit(BufferStreamDescriptor& buffer, DeltaUnitMem& unit) {
+  DeltaHeadUnit head;
+  read_field(buffer, head);
+ 
+  unit.flag = head.flag;
+  unit.length = head.length;
+  if (head.more) {
+    unit.length = read_varint(buffer) | (unit.length << DeltaHeadUnit::lenbits);
+  }
+  if (head.flag) {
+    unit.offset = read_varint(buffer);
+  }
+}
+
+const uint8_t varint_mask = ((2 << VarIntPart::lenbits) -1);
+const uint8_t head_varint_mask = ((2 << DeltaHeadUnit::lenbits) -1);
+inline void write_varint(BufferStreamDescriptor& buffer, uint64_t val) 
+{
+  VarIntPart vi;
+  do {
+    vi.subint = val & varint_mask;
+    val >>= VarIntPart::lenbits;
+    if (val == 0) {
+      write_field(buffer, vi);
+      break;
+    }
+    vi.more = 1;
+    write_field(buffer, vi);
+  } while (1);
+}
+
+void write_unit(BufferStreamDescriptor& buffer, const DeltaUnitMem& unit) {
+  // TODO: Abort if length 0?
+
+  DeltaHeadUnit head = {unit.flag, unit.length > head_varint_mask, (uint8_t)(unit.length & head_varint_mask)};
+  write_field(buffer, head);
+
+  uint64_t remaining_length = unit.length >> DeltaHeadUnit::lenbits;
+  write_varint(buffer, remaining_length);
+  if (unit.flag) {
+    write_varint(buffer, unit.offset);
+  }
+}
+
 
 int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize,
                      uint32_t *hash_table, int mask) {
@@ -213,18 +309,26 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   /* end of detect */
 
   BufferStreamDescriptor deltaStream = {deltaBuf, 0, *deltaSize};
-  BufferStreamDescriptor instStream = {instbuf, 0, sizeof(instbuf)};
+  BufferStreamDescriptor instStream = {instbuf, 0, sizeof(instbuf)}; // Instruction stream
   BufferStreamDescriptor dataStream = {databuf, 0, sizeof(databuf)};
   BufferStreamDescriptor newStream = {newBuf, begSize, newSize};
+  DeltaUnitMem unit = {}; // In-memory represtation of current working unit
 
   // TODO: Does this ever hit (duplicate data on each side is higher than original data)?
   if (begSize + endSize >= baseSize) { // TODO: test this path
-    DeltaUnitOffset<FlagLengthB16> record1;
+    /*DeltaUnitOffset<FlagLengthB16> record1;
     DeltaUnit<FlagLengthB16> record2;
     DeltaUnitOffset<FlagLengthB8> record3;
-    // DeltaUnit<FlagLengthB8> record4;
+    DeltaUnit<FlagLengthB8> record4;*/
 
     if (beg) {
+      // Data at start is from the original file, write instruction to copy from base
+      unit.flag = true;
+      unit.offset = 0;
+      unit.length = begSize;
+      write_unit(instStream, unit);
+
+      /*
       if (begSize < SHORT_LEN_LIMIT) {
         unit_set_flag(&record3, B8_OFFSET);
         record3.nOffset = 0;
@@ -260,10 +364,17 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
           write_field(instStream, record1);
         }
       }
+      */
     }
     if (newSize - begSize - endSize > 0) {
       int32_t litlen = newSize - begSize - endSize;
-      while (litlen > LEN_LIMIT) {
+      unit.flag = false;
+      unit.length = litlen;
+      write_unit(instStream, unit);
+      stream_into(dataStream, newStream, litlen);
+
+
+/*      while (litlen > LEN_LIMIT) {
         unit_set_flag(&record2, B16_LITERAL);
         unit_set_length(&record2, LEN_LIMIT);
         write_field(instStream, record2);
@@ -276,12 +387,16 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 
         write_field(instStream, record2);
         stream_into(dataStream, newStream, litlen);
-      }
+      }*/
     }
     if (end) {
       int32_t matchlen = endSize;
       int32_t offset = baseSize - endSize;
-      while (matchlen > LEN_LIMIT) {
+      unit.flag = true;
+      unit.offset = offset;
+      unit.length = matchlen;
+      write_unit(instStream, unit);
+      /*while (matchlen > LEN_LIMIT) {
         unit_set_flag(&record1, B16_OFFSET);
         record1.nOffset = offset;
         unit_set_length(&record1, LEN_LIMIT);
@@ -294,7 +409,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
         record1.nOffset = offset;
         unit_set_length(&record1, matchlen);
         write_field(instStream, record1);
-      }
+      }*/
     }
 
     int32_t instlen = sizeof(uint16_t) * 2 + instStream.cursor;
@@ -331,7 +446,6 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   GFixSizeChunking(baseBuf + begSize, baseSize - begSize - endSize, beg,
                    begSize, hash_table, bit);
 #if PRINT_PERF
-
   clock_gettime(CLOCK_MONOTONIC, &t1);
 
   fprintf(stderr, "size:%d\n", baseSize - begSize - endSize);
@@ -351,23 +465,30 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 
   uint32_t inputPos = begSize;
   uint32_t cursor;
-  DeltaUnitOffset<FlagLengthB16> record1;
+/*  DeltaUnitOffset<FlagLengthB16> record1;
   DeltaUnit<FlagLengthB16> record2;
   DeltaUnitOffset<FlagLengthB8> record3;
   DeltaUnit<FlagLengthB8> record4;
   unit_set_flag(&record1, B16_OFFSET);
   unit_set_flag(&record2, B16_LITERAL);
   unit_set_flag(&record3, B8_OFFSET);
-  unit_set_flag(&record4, B8_LITERAL);
-  int32_t unmatch64flag = 0;
-  int32_t flag = 0; /* to represent the last record in the deltaBuf, 1 for DeltaUnit1, 2 for DeltaUnit2 */
+  unit_set_flag(&record4, B8_LITERAL);*/
+  //int32_t unmatch64flag = 0;
+//  int32_t flag = 0; /* to represent the last record in the deltaBuf, 1 for DeltaUnit1, 2 for DeltaUnit2 */
   int32_t movebitlength = 0;
   if (sizeof(FPTYPE) * 8 % STRLOOK == 0)
     movebitlength = sizeof(FPTYPE) * 8 / STRLOOK;
   else
     movebitlength = sizeof(FPTYPE) * 8 / STRLOOK + 1;
   if (beg) {
-    if (begSize <= SHORT_LEN_LIMIT) {
+    // Data at start is from the original file, write instruction to copy from base
+    unit.flag = true;
+    unit.offset = 0;
+    unit.length = begSize;
+    write_unit(instStream, unit);
+    unit.length = 0; // Mark as written
+
+    /*if (begSize <= SHORT_LEN_LIMIT) {
       record3.nOffset = 0;
       unit_set_length(&record3, begSize);
       write_field(instStream, record3.flag_length);
@@ -397,6 +518,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
         write_field(instStream, record1);
       }
     }
+    */
   }
 
   FPTYPE fingerprint = 0;
@@ -404,7 +526,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     fingerprint = (fingerprint << (movebitlength)) + GEARmx[(newBuf + inputPos)[i]];
   }
 
-  int32_t mathflag = 0;
+  int32_t matchflag = 0;
   uint32_t handlebytes = begSize;
   while (inputPos + STRLOOK <= newSize - endSize) {
     uint32_t length;
@@ -417,28 +539,28 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     }
     FPTYPE hash = fingerprint;
     int32_t index1 = hash >> (sizeof(FPTYPE) * 8 - bit);
-    int32_t offset = 0;
+    uint32_t offset = 0;
     if (hash_table[index1] != 0 && memcmp(newBuf + inputPos, baseBuf + hash_table[index1], length) == 0) {
-      mathflag = 1;
-      int32_t index = index1;
-      offset = hash_table[index];
+      matchflag = 1;
+      offset = hash_table[index1];
     }
 
-    /* lookup */
-    if (mathflag) {
-      if (flag == B16_LITERAL) {
+    /* New data match found in hashtable/base data; attempt to create copy instruction*/
+    if (matchflag) {
+      /*if (flag == B16_LITERAL) {
         instStream.cursor -= sizeof(DeltaUnit<FlagLengthB16>);
         if (unit_get_length(record2) <= SHORT_LEN_LIMIT) {
           unmatch64flag = 1;
           unit_set_length(&record4, unit_get_length(record2));
-          write_field(instStream, record4);
+          write_field(instStream, record4); 
         } else {
           write_field(instStream, record2);
         }
-      }
+      }*/
 
+      // Check how much is possible to copy
       int32_t j = 0;
-      mathflag = 1;
+      // TODO: check if j can be removed
 #if 1 /* 8-bytes optimization */
       while (offset + length + j + 7 < baseSize - endSize &&
              cursor + j + 7 < newSize - endSize && 
@@ -453,25 +575,39 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 #endif
       cursor += j;
 
-      // TODO:!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Cancel
-      // fast_set_lengthv3(&record1, cursor - inputPos,0);
 
       int32_t matchlen = cursor - inputPos;
       handlebytes += cursor - inputPos;
-      record1.nOffset = offset;
+      uint64_t _offset = offset;
 
-      /* detect backward */
-      int32_t k = 0;
-      if (flag == B16_LITERAL) {
-        while (k + 1 <= offset && k + 1 <= unit_get_length(record2)) {
+
+      // Check if switching modes Literal -> Copy, and dump instruction if available
+      if (!unit.flag && unit.length) {
+        /* Detect if end of previous literal could have been a partial copy*/
+        uint32_t k = 0;
+        while (k + 1 <= offset && k + 1 <= unit.length) {
           if (baseBuf[offset - (k + 1)] == newBuf[inputPos - (k + 1)])
             k++;
           else
             break;
         }
+
+        if (k > 0) {
+          // Reduce literal by the amount covered by the copy
+          unit.length -= k;
+          // Set up adjusted copy parameters
+          matchlen += k;
+          _offset -= k;
+          // Last few literal bytes can be overwritten, so move cursor back
+          dataStream.cursor -= k;
+        }
+
+        write_unit(instStream, unit);
+        unit.length = 0; // Mark written
       }
 
-      if (k > 0) {
+      /* Previous literal could have had some copy, rewrite literal to be partially a copy*/
+      /*if (k > 0) {
         dataStream.cursor -= unit_get_length(record2);
 
         if (unmatch64flag) {
@@ -494,10 +630,16 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
         }
 
         matchlen += k;
-        record1.nOffset -= k;
-      }
+        _offset -= k;
+      }*/
+    
+      unit.flag = true;
+      unit.offset = _offset;
+      unit.length = matchlen;
+      write_unit(instStream, unit);
+      unit.length = 0; // Mark written
 
-      if (matchlen <= SHORT_LEN_LIMIT) {
+      /*if (matchlen <= SHORT_LEN_LIMIT) {
         record3.nOffset = record1.nOffset;
         unit_set_length(&record3, matchlen);
         write_field(instStream, record3.flag_length);
@@ -521,9 +663,19 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
         }
       }
       unmatch64flag = 0;
-      flag = 1;
-    } else {
-      if (flag == B16_LITERAL) {
+      flag = 1;*/
+    } else { // No match, need to write additional (literal) data
+      /* 
+       * Accumulate length one byte at a time (as literal) in unit while no match is found
+       * Pre-emptively write to datastream
+       */
+
+      unit.flag = false;
+      unit.length += 1;
+      stream_from(dataStream, newStream, inputPos, 1);
+      handlebytes += 1;
+
+      /*if (flag == B16_LITERAL) {
         if (unit_get_length(record2) < LEN_LIMIT) {
           memcpy(dataStream.buf + dataStream.cursor, newBuf + inputPos, 1);
           dataStream.cursor += 1;
@@ -539,7 +691,6 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
           memcpy(dataStream.buf + dataStream.cursor, newBuf + inputPos, 1);
           dataStream.cursor += 1;
         }
-
       } else {
         handlebytes += 1;
         unit_set_length(&record2, 1);
@@ -547,23 +698,30 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
         memcpy(dataStream.buf + dataStream.cursor, newBuf + inputPos, 1);
         dataStream.cursor += 1;
         flag = 2;
-      }
+      }*/
     }
-    if (mathflag) {
-      for (uint32_t j = cursor;
-           j < cursor + STRLOOK && cursor + STRLOOK < newSize - endSize; j++) {
+
+    // Update cursor (inputPos) and fingerprint
+    if (matchflag) {
+      for (uint32_t j = cursor; j < cursor + STRLOOK && cursor + STRLOOK < newSize - endSize; j++) {
         fingerprint = (fingerprint << (movebitlength)) + GEARmx[newBuf[j]];
       }
 
       inputPos = cursor;
     } else {
+      // TODO: optimization for fingerprint possible?
       if (inputPos + STRLOOK < newSize - endSize)
-        fingerprint = (fingerprint << (movebitlength)) +
-                      GEARmx[newBuf[inputPos + STRLOOK]];
+        fingerprint = (fingerprint << (movebitlength)) + GEARmx[newBuf[inputPos + STRLOOK]];
       inputPos++;
     }
-    mathflag = 0;
+    matchflag = 0;
   }
+
+  // Dump last unit if not written
+  /*if (unit.length) {
+    write_unit(instStream, unit);
+    unit.length = 0; // Mark written
+  }*/
 
 #if PRINT_PERF
   clock_gettime(CLOCK_MONOTONIC, &t1);
@@ -575,7 +733,17 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
               1000000000);
 #endif
 
-  if (flag == B16_LITERAL) {
+  // TODO: do something if last unit was literal :thinking:
+  // If last unit was unwritten literal, update it to use the rest of the data
+  if (!unit.flag && unit.length) {
+    newStream.cursor = handlebytes;
+    stream_into(dataStream, newStream, newSize - endSize - handlebytes);
+
+    unit.length += (newSize - endSize - handlebytes);
+    write_unit(instStream, unit);
+    unit.length = 0;
+  
+ /* if (flag == B16_LITERAL) {
     newStream.cursor = handlebytes;
     stream_into(dataStream, newStream, newSize - endSize - handlebytes);
 
@@ -592,20 +760,33 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
       unit_set_length(&record2, litlen - LEN_LIMIT);
       write_field(instStream, record2);
     }
-
-  } else {
+*/
+  } else { // Last unit was Copy, need new instruction
     if (newSize - endSize - handlebytes) {
-      unit_set_length(&record2, newSize - endSize - handlebytes);
-      write_field(instStream, record2);
       newStream.cursor = inputPos;
       stream_into(dataStream, newStream, newSize - endSize - handlebytes);
+
+      unit.flag = false;
+      unit.length = newSize - endSize - handlebytes;
+      write_unit(instStream, unit);
+      unit.length = 0;
+
+      /*unit_set_length(&record2, newSize - endSize - handlebytes);
+      write_field(instStream, record2);*/
     }
   }
 
   if (end) {
     int32_t matchlen = endSize;
     int32_t offset = baseSize - endSize;
-    while (matchlen > LEN_LIMIT) {
+     
+    unit.flag = true;
+    unit.offset = offset;
+    unit.length = matchlen;
+    write_unit(instStream, unit);
+    unit.length = 0;
+
+/*    while (matchlen > LEN_LIMIT) {
       unit_set_flag(&record1, B16_OFFSET);
       record1.nOffset = offset;
       unit_set_length(&record1, LEN_LIMIT);
@@ -617,7 +798,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
       record1.nOffset = offset;
       unit_set_length(&record1, matchlen);
       write_field(instStream, record1);
-    }
+    }*/
   }
 
   deltaStream.cursor = 0;
@@ -631,32 +812,20 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 int gdecode(uint8_t *deltaBuf, uint32_t deltaSize, uint8_t *baseBuf, uint32_t baseSize,
             uint8_t *outBuf, uint32_t *outSize) {
 
+  // TODO: convert instructionLength to VarInt
   uint32_t instructionLength = *(uint16_t*)deltaBuf;
   BufferStreamDescriptor deltaStream = {deltaBuf, sizeof(uint16_t), deltaSize}; // Instructions
   BufferStreamDescriptor addDeltaStream = {deltaBuf, instructionLength, deltaSize}; // Data in 
   BufferStreamDescriptor outStream = {outBuf, 0, *outSize};   // Data out
   BufferStreamDescriptor baseStream = {baseBuf, 0, baseSize}; // Data in
+  DeltaUnitMem unit = {};
 
   while (deltaStream.cursor < instructionLength) {
-    uint16_t flag = unit_get_flag_raw(deltaStream.buf + deltaStream.cursor);
-
-    if (flag == B16_OFFSET) { // Matched Offset Literal 16b length
-      DeltaUnitOffset<FlagLengthB16> record;
-      read_field(deltaStream, record);
-      stream_from(outStream, baseStream, record.nOffset, unit_get_length(record));
-    } else if (flag == B16_LITERAL) { // Unmatched Literal 16b length
-      DeltaUnit<FlagLengthB16> record;
-      read_field(deltaStream, record);
-      stream_into(outStream, addDeltaStream, unit_get_length(record));
-    } else if (flag == B8_OFFSET) { // Matched Offset Literal 8b length
-      DeltaUnitOffset<FlagLengthB8> record;
-      read_field(deltaStream, record);
-      stream_from(outStream, baseStream, record.nOffset, unit_get_length(record));
-    } else if (flag == B8_LITERAL) { // Unmatched Literal 8b length
-      DeltaUnit<FlagLengthB8> record;
-      read_field(deltaStream, record);
-      stream_into(outStream, addDeltaStream, unit_get_length(record));
-    }
+    read_unit(deltaStream, unit);
+    if (unit.flag) // Read from original file using offset
+      stream_from(outStream, baseStream, unit.offset, unit.length);
+    else          // Read from delta file at current cursor
+      stream_into(outStream, addDeltaStream, unit.length);
   }
 
   *outSize = outStream.cursor;
