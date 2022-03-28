@@ -213,6 +213,11 @@ int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize,
 
 int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
             uint32_t baseSize, uint8_t *deltaBuf, uint32_t *deltaSize) {
+#if PRINT_PERF
+  struct timespec tf0, tf1;
+  clock_gettime(CLOCK_MONOTONIC, &tf0);
+#endif
+
   /* detect the head and tail of one chunk */
   uint32_t beg = 0, end = 0, begSize = 0, endSize = 0;
 
@@ -303,6 +308,12 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     write_concat_buffer(deltaStream, dataStream);
 
     *deltaSize = sizeof(uint16_t) + instStream.cursor + dataStream.cursor;
+
+
+#if PRINT_PERF
+    clock_gettime(CLOCK_MONOTONIC, &tf1);
+    fprintf(stderr, "gencode took: %zdns\n", (tf1.tv_sec - tf0.tv_sec) * 1000000000 + tf1.tv_nsec - tf0.tv_nsec);
+#endif
     return instlen;
   }
 
@@ -511,12 +522,20 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   write_concat_buffer(deltaStream, instStream);
   write_concat_buffer(deltaStream, dataStream);
   *deltaSize = deltaStream.cursor;
+#if PRINT_PERF
+    clock_gettime(CLOCK_MONOTONIC, &tf1);
+    fprintf(stderr, "gencode took: %zdns\n", (tf1.tv_sec - tf0.tv_sec) * 1000000000 + tf1.tv_nsec - tf0.tv_nsec);
+#endif
   return sizeof(uint16_t) + instStream.cursor; // + dataStream?
 }
 
 int gdecode(uint8_t *deltaBuf, uint32_t deltaSize, uint8_t *baseBuf, uint32_t baseSize,
             uint8_t *outBuf, uint32_t *outSize) {
 
+#if PRINT_PERF
+  struct timespec tf0, tf1;
+  clock_gettime(CLOCK_MONOTONIC, &tf0);
+#endif
   // TODO: convert instructionLength to VarInt
   uint32_t instructionLength = *(uint16_t*)deltaBuf;
   BufferStreamDescriptor deltaStream = {deltaBuf, sizeof(uint16_t), deltaSize}; // Instructions
@@ -534,5 +553,9 @@ int gdecode(uint8_t *deltaBuf, uint32_t deltaSize, uint8_t *baseBuf, uint32_t ba
   }
 
   *outSize = outStream.cursor;
+#if PRINT_PERF
+    clock_gettime(CLOCK_MONOTONIC, &tf1);
+    fprintf(stderr, "gdecode took: %zdns\n", (tf1.tv_sec - tf0.tv_sec) * 1000000000 + tf1.tv_nsec - tf0.tv_nsec);
+#endif
   return outStream.cursor;
 }
