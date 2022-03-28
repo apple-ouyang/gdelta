@@ -93,7 +93,7 @@ void stream_into(BufferStreamDescriptor &dest, BufferStreamDescriptor &src, size
   src.cursor += length;
 }
 
-void stream_from(BufferStreamDescriptor &dest, BufferStreamDescriptor &src, size_t src_cursor, size_t length) {
+void stream_from(BufferStreamDescriptor &dest, const BufferStreamDescriptor &src, size_t src_cursor, size_t length) {
   memcpy(dest.buf + dest.cursor, src.buf + src_cursor, length);
   dest.cursor += length;
 }
@@ -103,7 +103,7 @@ void write_concat_buffer(BufferStreamDescriptor &dest, const BufferStreamDescrip
   dest.cursor += src.cursor;
 }
 
-inline uint64_t read_varint(BufferStreamDescriptor& buffer) {
+uint64_t read_varint(BufferStreamDescriptor& buffer) {
   VarIntPart vi;
   uint64_t val = 0;
   uint8_t offset = 0;
@@ -115,7 +115,7 @@ inline uint64_t read_varint(BufferStreamDescriptor& buffer) {
   return val;
 }
 
-inline void read_unit(BufferStreamDescriptor& buffer, DeltaUnitMem& unit) {
+void read_unit(BufferStreamDescriptor& buffer, DeltaUnitMem& unit) {
   DeltaHeadUnit head;
   read_field(buffer, head);
  
@@ -134,7 +134,7 @@ inline void read_unit(BufferStreamDescriptor& buffer, DeltaUnitMem& unit) {
 
 const uint8_t varint_mask = ((2 << VarIntPart::lenbits) -1);
 const uint8_t head_varint_mask = ((2 << DeltaHeadUnit::lenbits) -1);
-inline void write_varint(BufferStreamDescriptor& buffer, uint64_t val) 
+void write_varint(BufferStreamDescriptor& buffer, uint64_t val) 
 {
   VarIntPart vi;
   do {
