@@ -276,7 +276,6 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   BufferStreamDescriptor newStream = {newBuf, begSize, newSize};
   DeltaUnitMem unit = {}; // In-memory represtation of current working unit
 
-  // TODO: Does this ever hit (duplicate data on each side is higher than original data)?
   if (begSize + endSize >= baseSize) { // TODO: test this path
     if (beg) {
       // Data at start is from the original file, write instruction to copy from base
@@ -374,10 +373,10 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     fingerprint = (fingerprint << (movebitlength)) + GEARmx[(newBuf + inputPos)[i]];
   }
 
-  int32_t matchflag = 0;
   uint32_t handlebytes = begSize;
   while (inputPos + STRLOOK <= newSize - endSize) {
     uint32_t length;
+    bool matchflag = false;
     if (newSize - endSize - inputPos < STRLOOK) {
       cursor = inputPos + (newSize - endSize);
       length = newSize - endSize - inputPos;
@@ -385,11 +384,10 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
       cursor = inputPos + STRLOOK;
       length = STRLOOK;
     }
-    FPTYPE hash = fingerprint;
-    int32_t index1 = hash >> (sizeof(FPTYPE) * 8 - bit);
+    int32_t index1 = fingerprint >> (sizeof(FPTYPE) * 8 - bit);
     uint32_t offset = 0;
     if (hash_table[index1] != 0 && memcmp(newBuf + inputPos, baseBuf + hash_table[index1], length) == 0) {
-      matchflag = 1;
+      matchflag = true;
       offset = hash_table[index1];
     }
 
@@ -397,7 +395,6 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     if (matchflag) {
       // Check how much is possible to copy
       int32_t j = 0;
-      // TODO: check if j can be removed
 #if 1 /* 8-bytes optimization */
       while (offset + length + j + 7 < baseSize - endSize &&
              cursor + j + 7 < newSize - endSize && 
@@ -448,6 +445,13 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
       unit.length = matchlen;
       write_unit(instStream, unit);
       unit.length = 0; // Mark written
+
+
+      // Update cursor (inputPos) and fingerprint
+      for (uint32_t j = cursor; j < cursor + STRLOOK && cursor + STRLOOK < newSize - endSize; j++) {
+        fingerprint = (fingerprint << (movebitlength)) + GEARmx[newBuf[j]];
+      }
+      inputPos = cursor;
     } else { // No match, need to write additional (literal) data
       /* 
        * Accumulate length one byte at a time (as literal) in unit while no match is found
@@ -458,22 +462,13 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
       unit.length += 1;
       stream_from(dataStream, newStream, inputPos, 1);
       handlebytes += 1;
-    }
 
-    // Update cursor (inputPos) and fingerprint
-    if (matchflag) {
-      for (uint32_t j = cursor; j < cursor + STRLOOK && cursor + STRLOOK < newSize - endSize; j++) {
-        fingerprint = (fingerprint << (movebitlength)) + GEARmx[newBuf[j]];
-      }
 
-      inputPos = cursor;
-    } else {
-      // TODO: optimization for fingerprint possible?
+      // Update cursor (inputPos) and fingerprint
       if (inputPos + STRLOOK < newSize - endSize)
         fingerprint = (fingerprint << (movebitlength)) + GEARmx[newBuf[inputPos + STRLOOK]];
       inputPos++;
     }
-    matchflag = 0;
   }
 
 #if PRINT_PERF
@@ -526,7 +521,9 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     clock_gettime(CLOCK_MONOTONIC, &tf1);
     fprintf(stderr, "gencode took: %zdns\n", (tf1.tv_sec - tf0.tv_sec) * 1000000000 + tf1.tv_nsec - tf0.tv_nsec);
 #endif
-  return sizeof(uint16_t) + instStream.cursor; // + dataStream?
+  
+  free(hashtable);
+  return deltaStream.cursor; 
 }
 
 int gdecode(uint8_t *deltaBuf, uint32_t deltaSize, uint8_t *baseBuf, uint32_t baseSize,
