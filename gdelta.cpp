@@ -16,15 +16,15 @@
 #include "gdelta.h"
 #include "gear_matrix.h"
 
-#define MBSIZE 1024 * 1024
+#define INIT_BUFFER_SIZE 128 * 1024 
 #define FPTYPE uint64_t
 #define STRLOOK 16
 #define STRLSTEP 2
 #define LEN_LIMIT ((2 << 13) - 1)
 #define SHORT_LEN_LIMIT ((2 << 5) - 1)
 
-#define PRINT_PERF 1
-#define DEBUG_UNITS 1
+#define PRINT_PERF 0
+#define DEBUG_UNITS 0
 
 #pragma pack(push, 1)
 /*
@@ -72,8 +72,16 @@ typedef struct {
   uint64_t length;
 } BufferStreamDescriptor;
 
+void ensure_stream_length(BufferStreamDescriptor &stream, size_t length) {
+  if (length > stream.length) {
+    stream.buf = (uint8_t*)realloc(stream.buf, length);
+    stream.length = length;
+  }
+}
+
 template <typename T>
 void write_field(BufferStreamDescriptor &buffer, const T &field) {
+  ensure_stream_length(buffer, buffer.cursor + sizeof(T));
   memcpy(buffer.buf + buffer.cursor, &field, sizeof(T));
   buffer.cursor += sizeof(T);
   // TODO: check bounds (buffer->length)?
@@ -87,18 +95,22 @@ void read_field(BufferStreamDescriptor &buffer, T& field) {
   // TODO: check bounds (buffer->length)?
 }
 
+
 void stream_into(BufferStreamDescriptor &dest, BufferStreamDescriptor &src, size_t length) {
+  ensure_stream_length(dest, dest.cursor + length);
   memcpy(dest.buf + dest.cursor, src.buf + src.cursor, length);
   dest.cursor += length;
   src.cursor += length;
 }
 
 void stream_from(BufferStreamDescriptor &dest, const BufferStreamDescriptor &src, size_t src_cursor, size_t length) {
+  ensure_stream_length(dest, dest.cursor + length);
   memcpy(dest.buf + dest.cursor, src.buf + src_cursor, length);
   dest.cursor += length;
 }
 
 void write_concat_buffer(BufferStreamDescriptor &dest, const BufferStreamDescriptor &src) {
+  ensure_stream_length(dest, dest.cursor + src.cursor + 1);
   memcpy(dest.buf + dest.cursor, src.buf, src.cursor);
   dest.cursor += src.cursor;
 }
@@ -128,7 +140,7 @@ void read_unit(BufferStreamDescriptor& buffer, DeltaUnitMem& unit) {
     unit.offset = read_varint(buffer);
   }
 #if DEBUG_UNITS
-  fprintf(stderr, "Reading unit %d %zd %zd\n", unit.flag, unit.length, unit.offset);
+  fprintf(stderr, "Reading unit %d %llu %llu\n", unit.flag, unit.length, unit.offset);
 #endif
 }
 
@@ -153,7 +165,7 @@ void write_varint(BufferStreamDescriptor& buffer, uint64_t val)
 void write_unit(BufferStreamDescriptor& buffer, const DeltaUnitMem& unit) {
   // TODO: Abort if length 0?
 #if DEBUG_UNITS
-  fprintf(stderr, "Writing unit %d %zd %zd\n", unit.flag, unit.length, unit.offset);
+  fprintf(stderr, "Writing unit %d %llu %llu\n", unit.flag, unit.length, unit.offset);
 #endif
 
   DeltaHeadUnit head = {unit.flag, unit.length > head_varint_mask, (uint8_t)(unit.length & head_varint_mask)};
@@ -222,11 +234,8 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   uint32_t beg = 0, end = 0, begSize = 0, endSize = 0;
 
   // TODO: dynamic realloc for dataStream/instStream
-  uint8_t databuf[MBSIZE];
-  uint8_t instbuf[MBSIZE];
-  if (newSize >= 64 * 1024 || baseSize >= 64 * 1024) {
-    fprintf(stderr, "Gdelta not support size >= 64KB.\n");
-  }
+  uint8_t* databuf = (uint8_t*)malloc(INIT_BUFFER_SIZE);
+  uint8_t* instbuf = (uint8_t*)malloc(INIT_BUFFER_SIZE);
 
   // Find first difference 
   // First in 8 byte blocks and then in 1 byte blocks for speed
@@ -313,6 +322,8 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     clock_gettime(CLOCK_MONOTONIC, &tf1);
     fprintf(stderr, "gencode took: %zdns\n", (tf1.tv_sec - tf0.tv_sec) * 1000000000 + tf1.tv_nsec - tf0.tv_nsec);
 #endif
+    free(databuf);
+    free(instbuf);
     return instlen;
   }
 
@@ -521,7 +532,10 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     clock_gettime(CLOCK_MONOTONIC, &tf1);
     fprintf(stderr, "gencode took: %zdns\n", (tf1.tv_sec - tf0.tv_sec) * 1000000000 + tf1.tv_nsec - tf0.tv_nsec);
 #endif
-  
+ 
+// TODO: figure out why can't free databuf
+//  free(databuf);
+  free(instbuf);
   free(hash_table);
   return deltaStream.cursor; 
 }

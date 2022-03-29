@@ -86,8 +86,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  printf("Args: base:%s target/delta:%s encode:%d\n", basefp, targetfp,
-         edflags & 0b10);
+//  printf("Args: base:%s target/delta:%s encode:%d\n", basefp, targetfp, edflags & 0b10);
 
   if (basefp == nullptr || targetfp == nullptr)
     goto usage;
