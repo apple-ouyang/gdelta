@@ -214,7 +214,7 @@ void GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize,
 }
 
 int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
-            uint32_t baseSize, uint8_t *deltaBuf, uint32_t *deltaSize) {
+            uint32_t baseSize, uint8_t **deltaBuf, uint32_t *deltaSize) {
 #if PRINT_PERF
   struct timespec tf0, tf1;
   clock_gettime(CLOCK_MONOTONIC, &tf0);
@@ -223,6 +223,9 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   /* detect the head and tail of one chunk */
   uint32_t beg = 0, end = 0, begSize = 0, endSize = 0;
 
+  if (*deltaBuf == nullptr) {
+    *deltaBuf = (uint8_t*)malloc(INIT_BUFFER_SIZE);
+  }
   uint8_t* databuf = (uint8_t*)malloc(INIT_BUFFER_SIZE);
   uint8_t* instbuf = (uint8_t*)malloc(INIT_BUFFER_SIZE);
 
@@ -268,7 +271,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     endSize = 0;
   /* end of detect */
 
-  BufferStreamDescriptor deltaStream = {deltaBuf, 0, *deltaSize};
+  BufferStreamDescriptor deltaStream = {*deltaBuf, 0, *deltaSize};
   BufferStreamDescriptor instStream = {instbuf, 0, sizeof(instbuf)}; // Instruction stream
   BufferStreamDescriptor dataStream = {databuf, 0, sizeof(databuf)};
   BufferStreamDescriptor newStream = {newBuf, begSize, newSize};
@@ -298,13 +301,12 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
       write_unit(instStream, unit);
     }
 
-    int32_t instlen = sizeof(uint16_t) * 2 + instStream.cursor;
     write_varint(deltaStream, instStream.cursor);
     write_concat_buffer(deltaStream, instStream);
     write_concat_buffer(deltaStream, dataStream);
 
     *deltaSize = deltaStream.cursor; 
-
+    *deltaBuf = deltaStream.buf;
 
 #if PRINT_PERF
     clock_gettime(CLOCK_MONOTONIC, &tf1);
@@ -312,7 +314,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 #endif
     free(databuf);
     free(instbuf);
-    return instlen;
+    return deltaStream.cursor;
   }
 
   /* chunk the baseFile */
@@ -516,6 +518,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   write_concat_buffer(deltaStream, instStream);
   write_concat_buffer(deltaStream, dataStream);
   *deltaSize = deltaStream.cursor;
+  *deltaBuf = deltaStream.buf;
 #if PRINT_PERF
     clock_gettime(CLOCK_MONOTONIC, &tf1);
     fprintf(stderr, "gencode took: %zdns\n", (tf1.tv_sec - tf0.tv_sec) * 1000000000 + tf1.tv_nsec - tf0.tv_nsec);
@@ -528,7 +531,11 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 }
 
 int gdecode(uint8_t *deltaBuf, uint32_t deltaSize, uint8_t *baseBuf, uint32_t baseSize,
-            uint8_t *outBuf, uint32_t *outSize) {
+            uint8_t **outBuf, uint32_t *outSize) {
+
+  if (*outBuf == nullptr) {
+    *outBuf = (uint8_t*)malloc(INIT_BUFFER_SIZE);
+  }
 
 #if PRINT_PERF
   struct timespec tf0, tf1;
@@ -537,7 +544,7 @@ int gdecode(uint8_t *deltaBuf, uint32_t deltaSize, uint8_t *baseBuf, uint32_t ba
   BufferStreamDescriptor deltaStream = {deltaBuf, 0, deltaSize}; // Instructions
   uint64_t instructionLength = read_varint(deltaStream);
   BufferStreamDescriptor addDeltaStream = {deltaBuf, deltaStream.cursor + instructionLength, deltaSize};
-  BufferStreamDescriptor outStream = {outBuf, 0, *outSize};   // Data out
+  BufferStreamDescriptor outStream = {*outBuf, 0, *outSize};   // Data out
   BufferStreamDescriptor baseStream = {baseBuf, 0, baseSize}; // Data in
   DeltaUnitMem unit = {};
 
@@ -550,6 +557,7 @@ int gdecode(uint8_t *deltaBuf, uint32_t deltaSize, uint8_t *baseBuf, uint32_t ba
   }
 
   *outSize = outStream.cursor;
+  *outBuf = outStream.buf;
 #if PRINT_PERF
     clock_gettime(CLOCK_MONOTONIC, &tf1);
     fprintf(stderr, "gdecode took: %zdns\n", (tf1.tv_sec - tf0.tv_sec) * 1000000000 + tf1.tv_nsec - tf0.tv_nsec);
