@@ -312,8 +312,8 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     clock_gettime(CLOCK_MONOTONIC, &tf1);
     fprintf(stderr, "gencode took: %zdns\n", (tf1.tv_sec - tf0.tv_sec) * 1000000000 + tf1.tv_nsec - tf0.tv_nsec);
 #endif
-    free(databuf);
-    free(instbuf);
+    free(dataStream.buf);
+    free(instStream.buf);
     return deltaStream.cursor;
   }
 
@@ -524,8 +524,8 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     fprintf(stderr, "gencode took: %zdns\n", (tf1.tv_sec - tf0.tv_sec) * 1000000000 + tf1.tv_nsec - tf0.tv_nsec);
 #endif
  
-  free(databuf);
-  free(instbuf);
+  free(dataStream.buf);
+  free(instStream.buf);
   free(hash_table);
   return deltaStream.cursor; 
 }
