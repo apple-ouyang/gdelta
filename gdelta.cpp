@@ -1,7 +1,3 @@
-//
-// Created by THL on 2020/7/9.
-//
-
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -179,17 +175,15 @@ void write_unit(BufferStreamDescriptor& buffer, const DeltaUnitMem& unit) {
 }
 
 
-int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize,
+void GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize,
                      uint32_t *hash_table, int mask) {
-
   if (len < STRLOOK)
-    return 0;
+    return;
+
   int i = 0;
-  int movebitlength = 0;
-  if (sizeof(FPTYPE) * 8 % STRLOOK == 0)
-    movebitlength = sizeof(FPTYPE) * 8 / STRLOOK;
-  else
-    movebitlength = sizeof(FPTYPE) * 8 / STRLOOK + 1;
+  int movebitlength = sizeof(FPTYPE) * 8 / STRLOOK;
+  if (sizeof(FPTYPE) * 8 % STRLOOK != 0)
+    movebitlength++;
   FPTYPE fingerprint = 0;
 
   /** GEAR **/
@@ -207,12 +201,10 @@ int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize,
     if (flag == STRLSTEP) {
       flag = 0;
       index = (fingerprint) >> (sizeof(FPTYPE) * 8 - mask);
-      if (hash_table[index] == 0) {
-        hash_table[index] = i + _begsize;
-      } else {
+      if (hash_table[index] != 0) {
         index = fingerprint >> (sizeof(FPTYPE) * 8 - mask);
-        hash_table[index] = i + _begsize;
       }
+      hash_table[index] = i + _begsize;
     }
     /** GEAR **/
     fingerprint = (fingerprint << (movebitlength)) + GEARmx[data[i + STRLOOK]];
@@ -220,7 +212,7 @@ int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize,
     flag++;
   }
 
-  return 0;
+  return;
 }
 
 int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
@@ -233,7 +225,6 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   /* detect the head and tail of one chunk */
   uint32_t beg = 0, end = 0, begSize = 0, endSize = 0;
 
-  // TODO: dynamic realloc for dataStream/instStream
   uint8_t* databuf = (uint8_t*)malloc(INIT_BUFFER_SIZE);
   uint8_t* instbuf = (uint8_t*)malloc(INIT_BUFFER_SIZE);
 
@@ -310,12 +301,11 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     }
 
     int32_t instlen = sizeof(uint16_t) * 2 + instStream.cursor;
-    uint16_t tmp = instStream.cursor + sizeof(uint16_t);
-    write_field(deltaStream, tmp);
+    write_varint(deltaStream, instStream.cursor);
     write_concat_buffer(deltaStream, instStream);
     write_concat_buffer(deltaStream, dataStream);
 
-    *deltaSize = sizeof(uint16_t) + instStream.cursor + dataStream.cursor;
+    *deltaSize = deltaStream.cursor; 
 
 
 #if PRINT_PERF
@@ -524,7 +514,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   }
 
   deltaStream.cursor = 0;
-  write_field(deltaStream, (uint16_t)(instStream.cursor + sizeof(uint16_t)));
+  write_varint(deltaStream, instStream.cursor);
   write_concat_buffer(deltaStream, instStream);
   write_concat_buffer(deltaStream, dataStream);
   *deltaSize = deltaStream.cursor;
@@ -533,8 +523,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
     fprintf(stderr, "gencode took: %zdns\n", (tf1.tv_sec - tf0.tv_sec) * 1000000000 + tf1.tv_nsec - tf0.tv_nsec);
 #endif
  
-// TODO: figure out why can't free databuf
-//  free(databuf);
+  free(databuf);
   free(instbuf);
   free(hash_table);
   return deltaStream.cursor; 
@@ -547,10 +536,9 @@ int gdecode(uint8_t *deltaBuf, uint32_t deltaSize, uint8_t *baseBuf, uint32_t ba
   struct timespec tf0, tf1;
   clock_gettime(CLOCK_MONOTONIC, &tf0);
 #endif
-  // TODO: convert instructionLength to VarInt
-  uint32_t instructionLength = *(uint16_t*)deltaBuf;
-  BufferStreamDescriptor deltaStream = {deltaBuf, sizeof(uint16_t), deltaSize}; // Instructions
-  BufferStreamDescriptor addDeltaStream = {deltaBuf, instructionLength, deltaSize}; // Data in 
+  BufferStreamDescriptor deltaStream = {deltaBuf, 0, deltaSize}; // Instructions
+  uint64_t instructionLength = read_varint(deltaStream);
+  BufferStreamDescriptor addDeltaStream = {deltaBuf, deltaStream.cursor + instructionLength, deltaSize};
   BufferStreamDescriptor outStream = {outBuf, 0, *outSize};   // Data out
   BufferStreamDescriptor baseStream = {baseBuf, 0, baseSize}; // Data in
   DeltaUnitMem unit = {};
