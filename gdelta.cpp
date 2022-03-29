@@ -16,8 +16,6 @@
 #define FPTYPE uint64_t
 #define STRLOOK 16
 #define STRLSTEP 2
-#define LEN_LIMIT ((2 << 13) - 1)
-#define SHORT_LEN_LIMIT ((2 << 5) - 1)
 
 #define PRINT_PERF 0
 #define DEBUG_UNITS 0
