@@ -86,8 +86,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  printf("Args: base:%s target/delta:%s encode:%d\n", basefp, targetfp,
-         edflags & 0b10);
+//  printf("Args: base:%s target/delta:%s encode:%d\n", basefp, targetfp, edflags & 0b10);
 
   if (basefp == nullptr || targetfp == nullptr)
     goto usage;
@@ -120,15 +119,12 @@ int main(int argc, char *argv[]) {
     uint32_t delta_size = target_delta_size;
     uint8_t *delta = (uint8_t *)malloc(delta_size);
     int status = gencode(target_delta, target_delta_size, origin, origin_size,
-                         delta, &delta_size);
+                         &delta, &delta_size);
 
     if (write(output_fd, delta, delta_size) < 0) {
       printf("Failed to write output file (%d)\n", output_fd);
       return 1;
     }
-
-    free(delta);
-    return status;
   }
 
   if (edflags & 0b01) {
@@ -138,7 +134,7 @@ int main(int argc, char *argv[]) {
     uint32_t target_size = target_delta_size + origin_size * 11 / 10;
     uint8_t *target = (uint8_t *)malloc(target_size);
     int status = gdecode(target_delta, target_delta_size, origin, origin_size,
-                         target, &target_size);
+                         &target, &target_size);
 
     if (write(output_fd, target, target_size) < 0) {
       printf("Failed to write output file (%d)\n", output_fd);
@@ -146,7 +142,6 @@ int main(int argc, char *argv[]) {
     }
 
     free(target);
-    return status;
   }
 
   free(target_delta);
