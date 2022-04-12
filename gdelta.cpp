@@ -449,8 +449,8 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 
 
       // Update cursor (inputPos) and fingerprint
-      for (uint32_t j = cursor; j < cursor + STRLOOK && cursor + STRLOOK < newSize - endSize; j++) {
-        fingerprint = (fingerprint << (movebitlength)) + GEARmx[newBuf[j]];
+      for (uint32_t k = cursor; k < cursor + STRLOOK && cursor + STRLOOK < newSize - endSize; k++) {
+        fingerprint = (fingerprint << (movebitlength)) + GEARmx[newBuf[k]];
       }
       inputPos = cursor;
     } else { // No match, need to write additional (literal) data
