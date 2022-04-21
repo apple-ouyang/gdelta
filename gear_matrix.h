@@ -1,12 +1,3 @@
-/**
- * @Author: Wang Haitao
- * @Date: 2022-02-20 21:04:03
- * @LastEditTime: 2022-02-20 21:49:46
- * @LastEditors: Wang Haitao
- * @FilePath: /titan/util/gear-matrix.h
- * @Description: Github:https://github.com/apple-ouyang
- * @ Gitee:https://gitee.com/apple-ouyang
- */
 #pragma once
 #include <cstdint>
 
