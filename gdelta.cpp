@@ -21,7 +21,7 @@
 #define STRLOOK 16
 #define STRLSTEP 2
 
-#define PRINT_PERF 1
+// #define PRINT_PERF 1
 
 #pragma pack(push,1)
 typedef struct {
