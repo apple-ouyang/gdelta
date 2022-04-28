@@ -13,8 +13,8 @@
 #include <ctime>
 #endif
 
-#include "gdelta.h"
-#include "gear_matrix.h"
+#include "gdelta_original.h"
+#include "gear_matrix_original.h"
 
 #define MBSIZE 1024 * 1024
 #define FPTYPE uint64_t
@@ -83,7 +83,7 @@ inline uint16_t unit_get_length(T* unit) {
   return unit->flag_length.length;
 }
 
-int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize,
+int OriginalGFixSizeChunking(unsigned char *data, int len, int begflag, int begsize,
                      uint32_t *hash_table, int mask) {
 
   if (len < STRLOOK)
@@ -99,7 +99,7 @@ int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize,
   /** GEAR **/
 
   for (; i < STRLOOK; i++) {
-    fingerprint = (fingerprint << (movebitlength)) + GEARmx[data[i]];
+    fingerprint = (fingerprint << (movebitlength)) + gear_matrix_original[data[i]];
   }
 
   i -= STRLOOK;
@@ -122,7 +122,7 @@ int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize,
       /** GEAR **/
 
       fingerprint =
-          (fingerprint << (movebitlength)) + GEARmx[data[i + STRLOOK]];
+          (fingerprint << (movebitlength)) + gear_matrix_original[data[i + STRLOOK]];
 
       i++;
       flag++;
@@ -145,7 +145,7 @@ int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize,
       /** GEAR **/
 
       fingerprint =
-          (fingerprint << (movebitlength)) + GEARmx[data[i + STRLOOK]];
+          (fingerprint << (movebitlength)) + gear_matrix_original[data[i + STRLOOK]];
 
       i++;
       flag++;
@@ -155,7 +155,7 @@ int GFixSizeChunking(unsigned char *data, int len, int begflag, int begsize,
   return 0;
 }
 
-int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
+int gencode_original(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
             uint32_t baseSize, uint8_t *deltaBuf, uint32_t *deltaSize) {
   /* detect the head and tail of one chunk */
   uint32_t beg = 0, end = 0, begSize = 0, endSize = 0;
@@ -357,7 +357,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   clock_gettime(CLOCK_MONOTONIC, &t0);
 #endif
 
-  GFixSizeChunking(baseBuf + begSize, baseSize - begSize - endSize, beg,
+  OriginalGFixSizeChunking(baseBuf + begSize, baseSize - begSize - endSize, beg,
                    begSize, hash_table, bit);
 #if PRINT_PERF
 
@@ -436,7 +436,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   FPTYPE fingerprint = 0;
   for (uint32_t i = 0; i < STRLOOK && i < newSize - endSize - inputPos; i++) {
     fingerprint =
-        (fingerprint << (movebitlength)) + GEARmx[(newBuf + inputPos)[i]];
+        (fingerprint << (movebitlength)) + gear_matrix_original[(newBuf + inputPos)[i]];
   }
 
   int mathflag = 0;
@@ -627,7 +627,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
       //            }
       for (uint32_t j = cursor;
            j < cursor + STRLOOK && cursor + STRLOOK < newSize - endSize; j++) {
-        fingerprint = (fingerprint << (movebitlength)) + GEARmx[newBuf[j]];
+        fingerprint = (fingerprint << (movebitlength)) + gear_matrix_original[newBuf[j]];
       }
 
       inputPos = cursor;
@@ -635,7 +635,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
 
       if (inputPos + STRLOOK < newSize - endSize)
         fingerprint = (fingerprint << (movebitlength)) +
-                      GEARmx[newBuf[inputPos + STRLOOK]];
+                      gear_matrix_original[newBuf[inputPos + STRLOOK]];
       inputPos++;
     }
     mathflag = 0;
@@ -732,7 +732,7 @@ int gencode(uint8_t *newBuf, uint32_t newSize, uint8_t *baseBuf,
   return inslen;
 }
 
-int gdecode(uint8_t *deltaBuf,  uint32_t, uint8_t *baseBuf,
+int gdecode_original(uint8_t *deltaBuf,  uint32_t, uint8_t *baseBuf,
             uint32_t, uint8_t *outBuf, uint32_t *outSize) {
 
   /* datalength is the cursor of outBuf, and readLength deltaBuf */

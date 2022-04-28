@@ -4,6 +4,7 @@
 
 #include "cstring"
 #include "gdelta.h"
+#include "gdelta_original.h"
 #include <cstdio>
 #include <cstdlib>
 #include <ctype.h>
@@ -119,7 +120,7 @@ int main(int argc, char *argv[]) {
     // it's less than that)
     uint32_t delta_size = target_delta_size;
     uint8_t *delta = (uint8_t *)malloc(delta_size);
-    int status = gencode(target_delta, target_delta_size, origin, origin_size,
+    int status = gencode_original(target_delta, target_delta_size, origin, origin_size,
                          delta, &delta_size);
 
     if (write(output_fd, delta, delta_size) < 0) {
@@ -137,7 +138,7 @@ int main(int argc, char *argv[]) {
     // TODO: handle status and increase buffer if too small
     uint32_t target_size = target_delta_size + origin_size * 11 / 10;
     uint8_t *target = (uint8_t *)malloc(target_size);
-    int status = gdecode(target_delta, target_delta_size, origin, origin_size,
+    int status = gdecode_original(target_delta, target_delta_size, origin, origin_size,
                          target, &target_size);
 
     if (write(output_fd, target, target_size) < 0) {
