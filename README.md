@@ -17,3 +17,14 @@ It's not written by myself, It was written by my upperclassman HaoLiang Tan.
 His Github homepage is [here](https://github.com/AnsonHooL).
 
 He has another more complex version of gdelta using zstd, you can see [here](https://github.com/AnsonHooL/gdelta).
+
+# Community Implementations
+
+The following are third-party implementations of the GDelta algorithm. These are maintained independently and we have not verified their correctness or performance claims.
+
+## Rust
+
+- **[gdelta-rs](https://github.com/ImGajeed76/gdelta)** by [@ImGajeed76](https://github.com/ImGajeed76) - A pure Rust implementation with SIMD optimization. Claims ~1 GB/s encoding speed and memory-safe implementation.
+
+*If you've created an implementation in another language, feel free to open a PR to add it here.*
+
