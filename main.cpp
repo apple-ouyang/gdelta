@@ -95,7 +95,7 @@ int main(int argc, char *argv[]) {
   int output_fd = fileno(stdout);
   if (cvalue != nullptr) {
 #ifdef _WIN32
-    output_fd = open(cvalue, O_RDWR | O_TRUNC | O_CREAT);
+    output_fd = open(cvalue, O_RDWR | O_TRUNC | O_CREAT | O_BINARY);
 #else
     output_fd = open(cvalue, O_RDWR | O_TRUNC | O_CREAT,
                      S_IRGRP | S_IWGRP | S_IWUSR | S_IRUSR);
