@@ -35,7 +35,7 @@ struct _DeltaHead {
   uint8_t flag: FLAGLEN;
   uint8_t more: 1;
   uint8_t length: (7-FLAGLEN);
-  const static uint8_t lenbits = FLAGLEN;
+  const static uint8_t lenbits = (7 - FLAGLEN);
 };
 
 typedef _DeltaHead<1> DeltaHeadUnit;
@@ -165,8 +165,8 @@ void write_unit(BufferStreamDescriptor& buffer, const DeltaUnitMem& unit) {
   DeltaHeadUnit head = {unit.flag, unit.length > head_varint_mask, (uint8_t)(unit.length & head_varint_mask)};
   write_field(buffer, head);
 
-  uint64_t remaining_length = unit.length >> DeltaHeadUnit::lenbits;
-  write_varint(buffer, remaining_length);
+  if (uint64_t remaining_length = unit.length >> DeltaHeadUnit::lenbits)
+    write_varint(buffer, remaining_length);
   if (unit.flag) {
     write_varint(buffer, unit.offset);
   }
